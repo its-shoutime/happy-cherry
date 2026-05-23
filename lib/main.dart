@@ -28,7 +28,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final Pet pet = Pet(name: "Mochi", type: PetType.dog);
+  final Pet pet = Pet(name: "Mochi", type: PetType.blob);
 
   Timer? timer;
 
@@ -49,8 +49,8 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  String getPetEmoji() {
-    return pet.emoji;
+  Widget buildPetGraphic() {
+    return Image.asset(pet.assetPath, height: 200, fit: BoxFit.contain);
   }
 
   String getPetFeels() {
@@ -106,7 +106,7 @@ class _HomePageState extends State<HomePage> {
           children: [
             const Spacer(),
 
-            Text(getPetEmoji(), style: const TextStyle(fontSize: 120)),
+            buildPetGraphic(),
 
             const SizedBox(height: 20),
 
