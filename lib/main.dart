@@ -28,7 +28,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final Pet pet = Pet(name: "Mochi");
+  final Pet pet = Pet(name: "Mochi", type: PetType.dog);
 
   Timer? timer;
 
@@ -50,22 +50,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   String getPetEmoji() {
-    switch (pet.mood) {
-      case PetMood.happy:
-        return "😄";
-
-      case PetMood.okay:
-        return "🙂";
-
-      case PetMood.sad:
-        return "😭";
-
-      case PetMood.sleeping:
-        return "😴";
-
-      case PetMood.sick:
-        return "🤒";
-    }
+    return pet.emoji;
   }
 
   String getPetFeels() {
