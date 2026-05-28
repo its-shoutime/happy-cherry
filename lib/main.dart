@@ -1,6 +1,8 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'models/pet.dart';
+import 'pet_animation.dart';
+import 'user_input.dart';
+import 'time_tracker.dart';
 
 void main() {
   runApp(const MyApp());
@@ -30,27 +32,24 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final Pet pet = Pet(name: "Mochi", type: PetType.blob);
 
-  Timer? timer;
+  late PetTimeTracker timeTracker;
 
   @override
   void initState() {
     super.initState();
 
-    timer = Timer.periodic(const Duration(seconds: 5), (_) {
-      setState(() {
-        pet.decayStats();
-      });
-    });
+    timeTracker = PetTimeTracker(pet: pet, onTick: () => setState(() {}));
+    timeTracker.start();
   }
 
   @override
   void dispose() {
-    timer?.cancel();
+    timeTracker.stop();
     super.dispose();
   }
 
   Widget buildPetGraphic() {
-    return Image.asset(pet.assetPath, height: 200, fit: BoxFit.contain);
+    return PetGraphic(pet: pet, height: 200);
   }
 
   String getPetFeels() {
@@ -123,36 +122,10 @@ class _HomePageState extends State<HomePage> {
 
             const Spacer(),
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      pet.feed();
-                    });
-                  },
-                  child: const Text("Feed"),
-                ),
-
-                ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      pet.play();
-                    });
-                  },
-                  child: const Text("Play"),
-                ),
-
-                ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      pet.sleep();
-                    });
-                  },
-                  child: const Text("Sleep"),
-                ),
-              ],
+            UserActions(
+              onFeed: () => setState(() => pet.feed()),
+              onPlay: () => setState(() => pet.play()),
+              onSleep: () => setState(() => pet.sleep()),
             ),
 
             const SizedBox(height: 30),
