@@ -49,6 +49,7 @@ class _HomePageState extends State<HomePage> {
       timeTracker.start();
       _isLoading = false;
     });
+    await GameState.savePet(pet);
   }
 
   void _onTick() {
@@ -64,25 +65,6 @@ class _HomePageState extends State<HomePage> {
 
   Widget buildPetGraphic() {
     return PetGraphic(pet: pet, height: 200);
-  }
-
-  String getPetFeels() {
-    switch (pet.mood) {
-      case PetMood.happy:
-        return "YAY";
-
-      case PetMood.okay:
-        return "...";
-
-      case PetMood.sad:
-        return "*cries";
-
-      case PetMood.sleeping:
-        return "zzzz";
-
-      case PetMood.sick:
-        return "ouch";
-    }
   }
 
   Widget buildStatBar(String label, int value) {
@@ -132,12 +114,12 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(height: 20),
 
             Text(
-              getPetFeels(),
+              pet.feels,
               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
 
             Text(
-              pet.ageInMinutes.toString() + " mins old",
+              "${pet.ageInMinutes} mins old",
               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
 

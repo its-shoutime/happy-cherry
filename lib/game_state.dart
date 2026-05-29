@@ -13,17 +13,34 @@ class GameState {
 
     try {
       final decoded = jsonDecode(petJson) as Map<String, dynamic>;
-      return Pet.fromJson(decoded);
-    } catch (e) {
-      print('Error loading pet: $e');
+      final savedAt = decoded['savedAt'] as String?;
+      final savedPet = decoded['pet'] as Map<String, dynamic>?;
+
+      final pet = savedPet != null
+          ? Pet.fromJson(savedPet)
+          : Pet.fromJson(decoded);
+
+      if (savedAt != null) {
+        final lastSaved = DateTime.tryParse(savedAt) ?? DateTime.now();
+        final elapsed = DateTime.now().difference(lastSaved);
+        if (elapsed > Duration.zero) {
+          pet.advanceTime(elapsed);
+        }
+      }
+
+      return pet;
+    } catch (_) {
       return null;
     }
   }
 
   static Future<void> savePet(Pet pet) async {
     final prefs = await SharedPreferences.getInstance();
-    final petJson = jsonEncode(pet.toJson());
-    await prefs.setString(_petKey, petJson);
+    final saveData = {
+      'pet': pet.toJson(),
+      'savedAt': DateTime.now().toIso8601String(),
+    };
+    await prefs.setString(_petKey, jsonEncode(saveData));
   }
 
   static Future<void> deleteSave() async {

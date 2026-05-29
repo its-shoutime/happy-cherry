@@ -50,6 +50,21 @@ class Pet {
     return PetMood.okay;
   }
 
+  String get feels {
+    switch (mood) {
+      case PetMood.happy:
+        return 'YAY';
+      case PetMood.okay:
+        return '...';
+      case PetMood.sad:
+        return '*cries';
+      case PetMood.sleeping:
+        return 'zzzz';
+      case PetMood.sick:
+        return 'ouch';
+    }
+  }
+
   String get assetPath => 'assets/pets/${type.name}/${mood.name}.png';
 
   void decayStats() {
@@ -82,6 +97,18 @@ class Pet {
     } else if (ageInMinutes >= 4320 && stage == PetStage.teen) {
       stage = PetStage.adult;
     }
+  }
+
+  void advanceTime(Duration elapsed) {
+    if (elapsed.isNegative) return;
+
+    final tickCount = elapsed.inSeconds ~/ 5;
+    hunger = (hunger - 5 * tickCount).clamp(0, 100);
+    happiness = (happiness - 3 * tickCount).clamp(0, 100);
+    energy = (energy - 2 * tickCount).clamp(0, 100);
+
+    ageInMinutes += elapsed.inMinutes;
+    evolve();
   }
 
   Map<String, dynamic> toJson() => {
