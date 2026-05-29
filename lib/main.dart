@@ -4,6 +4,8 @@ import 'pet_animation.dart';
 import 'user_input.dart';
 import 'time_tracker.dart';
 import 'game_state.dart';
+import 'info_button.dart';
+import 'rename_button.dart';
 
 void main() {
   runApp(const MyApp());
@@ -100,7 +102,20 @@ class _HomePageState extends State<HomePage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(pet.name), centerTitle: true),
+      appBar: AppBar(
+        title: Text(pet.name),
+        centerTitle: true,
+        actions: [
+          RenameButton(
+            pet: pet,
+            onRename: (newName) {
+              setState(() => pet.name = newName);
+              GameState.savePet(pet);
+            },
+          ),
+          InfoButton(pet: pet),
+        ],
+      ),
       backgroundColor: const Color.fromARGB(255, 205, 150, 168),
 
       body: Padding(
@@ -115,11 +130,6 @@ class _HomePageState extends State<HomePage> {
 
             Text(
               pet.feels,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-
-            Text(
-              "${pet.ageInMinutes} mins old",
               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
 
