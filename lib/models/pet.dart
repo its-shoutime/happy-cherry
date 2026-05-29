@@ -83,4 +83,26 @@ class Pet {
       stage = PetStage.adult;
     }
   }
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'type': type.name,
+    'stage': stage.name,
+    'hunger': hunger,
+    'happiness': happiness,
+    'energy': energy,
+    'ageInMinutes': ageInMinutes,
+    'xp': xp,
+  };
+
+  factory Pet.fromJson(Map<String, dynamic> json) => Pet(
+    name: json['name'] as String,
+    type: PetType.values.byName(json['type'] as String),
+    stage: PetStage.values.byName(json['stage'] as String),
+    hunger: json['hunger'] as int,
+    happiness: json['happiness'] as int,
+    energy: json['energy'] as int,
+    ageInMinutes: json['ageInMinutes'] as int,
+    xp: json['xp'] as int,
+  );
 }
