@@ -3,6 +3,7 @@ import 'models/pet.dart';
 import 'pet_animation.dart';
 import 'user_input.dart';
 import 'time_tracker.dart';
+import 'game_state.dart';
 
 void main() {
   runApp(const MyApp());
@@ -30,16 +31,30 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final Pet pet = Pet(name: "Mochi", type: PetType.blob);
-
+  late Pet pet;
   late PetTimeTracker timeTracker;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    _loadGame();
+  }
 
-    timeTracker = PetTimeTracker(pet: pet, onTick: () => setState(() {}));
-    timeTracker.start();
+  Future<void> _loadGame() async {
+    final loadedPet = await GameState.loadPet();
+    setState(() {
+      pet = loadedPet ?? Pet(name: "Mochi", type: PetType.blob);
+      timeTracker = PetTimeTracker(pet: pet, onTick: _onTick);
+      timeTracker.start();
+      _isLoading = false;
+    });
+    await GameState.savePet(pet);
+  }
+
+  void _onTick() {
+    setState(() {});
+    GameState.savePet(pet);
   }
 
   @override
@@ -50,25 +65,6 @@ class _HomePageState extends State<HomePage> {
 
   Widget buildPetGraphic() {
     return PetGraphic(pet: pet, height: 200);
-  }
-
-  String getPetFeels() {
-    switch (pet.mood) {
-      case PetMood.happy:
-        return "YAY";
-
-      case PetMood.okay:
-        return "...";
-
-      case PetMood.sad:
-        return "*cries";
-
-      case PetMood.sleeping:
-        return "zzzz";
-
-      case PetMood.sick:
-        return "ouch";
-    }
   }
 
   Widget buildStatBar(String label, int value) {
@@ -95,8 +91,16 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text("Happy Cherry"), centerTitle: true),
+        backgroundColor: const Color.fromARGB(255, 205, 150, 168),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
-      appBar: AppBar(title: Text("${pet.name}"), centerTitle: true),
+      appBar: AppBar(title: Text(pet.name), centerTitle: true),
       backgroundColor: const Color.fromARGB(255, 205, 150, 168),
 
       body: Padding(
@@ -110,7 +114,12 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(height: 20),
 
             Text(
-              getPetFeels(),
+              pet.feels,
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+
+            Text(
+              "${pet.ageInMinutes} mins old",
               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
 
@@ -123,9 +132,18 @@ class _HomePageState extends State<HomePage> {
             const Spacer(),
 
             UserActions(
-              onFeed: () => setState(() => pet.feed()),
-              onPlay: () => setState(() => pet.play()),
-              onSleep: () => setState(() => pet.sleep()),
+              onFeed: () {
+                setState(() => pet.feed());
+                GameState.savePet(pet);
+              },
+              onPlay: () {
+                setState(() => pet.play());
+                GameState.savePet(pet);
+              },
+              onSleep: () {
+                setState(() => pet.sleep());
+                GameState.savePet(pet);
+              },
             ),
 
             const SizedBox(height: 30),
