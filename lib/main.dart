@@ -4,6 +4,8 @@ import 'pet_animation.dart';
 import 'user_input.dart';
 import 'time_tracker.dart';
 import 'game_state.dart';
+import 'info_button.dart';
+import 'rename_button.dart';
 
 void main() {
   runApp(const MyApp());
@@ -44,7 +46,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _loadGame() async {
     final loadedPet = await GameState.loadPet();
     setState(() {
-      pet = loadedPet ?? Pet(name: "Mochi", type: PetType.blob);
+      pet = loadedPet ?? Pet(name: "Mochi");
       timeTracker = PetTimeTracker(pet: pet, onTick: _onTick);
       timeTracker.start();
       _isLoading = false;
@@ -100,7 +102,20 @@ class _HomePageState extends State<HomePage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(pet.name), centerTitle: true),
+      appBar: AppBar(
+        title: Text(pet.name),
+        centerTitle: true,
+        actions: [
+          RenameButton(
+            pet: pet,
+            onRename: (newName) {
+              setState(() => pet.name = newName);
+              GameState.savePet(pet);
+            },
+          ),
+          InfoButton(pet: pet),
+        ],
+      ),
       backgroundColor: const Color.fromARGB(255, 205, 150, 168),
 
       body: Padding(
@@ -118,30 +133,21 @@ class _HomePageState extends State<HomePage> {
               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
 
-            Text(
-              "${pet.ageInMinutes} mins old",
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-
             const SizedBox(height: 40),
 
             buildStatBar("Hunger", pet.hunger),
             buildStatBar("Happiness", pet.happiness),
-            buildStatBar("Energy", pet.energy),
 
             const Spacer(),
 
             UserActions(
+              isSleeping: pet.mood == PetMood.sleeping,
               onFeed: () {
                 setState(() => pet.feed());
                 GameState.savePet(pet);
               },
               onPlay: () {
                 setState(() => pet.play());
-                GameState.savePet(pet);
-              },
-              onSleep: () {
-                setState(() => pet.sleep());
                 GameState.savePet(pet);
               },
             ),

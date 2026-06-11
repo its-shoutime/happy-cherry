@@ -1,16 +1,9 @@
+import 'pet_types.dart';
+
 enum PetMood { happy, okay, sad, sleeping, sick }
 
-enum PetType { blob }
-
-enum PetStage { baby, child, teen, adult }
-
 extension PetTypeDisplay on PetType {
-  String get displayName {
-    switch (this) {
-      case PetType.blob:
-        return 'Blob';
-    }
-  }
+  String get displayName => name;
 }
 
 class Pet {
@@ -19,23 +12,21 @@ class Pet {
   PetStage stage;
   int hunger; // 0 = starving, 100 = full
   int happiness; // 0 = sad, 100 = happy
-  int energy; // 0 = tired, 100 = energetic
   int ageInMinutes;
   int xp;
 
   Pet({
     required this.name,
-    this.type = PetType.blob,
+    this.type = blob,
     this.stage = PetStage.baby,
     this.hunger = 100,
     this.happiness = 100,
-    this.energy = 100,
     this.ageInMinutes = 0,
     this.xp = 0,
   });
 
   PetMood get mood {
-    if (energy <= 15) {
+    if (isAsleep) {
       return PetMood.sleeping;
     }
 
@@ -43,7 +34,7 @@ class Pet {
       return PetMood.sad;
     }
 
-    if (hunger >= 70 && happiness >= 70 && energy >= 70) {
+    if (hunger >= 70 && happiness >= 70) {
       return PetMood.happy;
     }
 
@@ -65,12 +56,21 @@ class Pet {
     }
   }
 
-  String get assetPath => 'assets/pets/${type.name}/${mood.name}.png';
+  bool get isAsleep {
+    final now = DateTime.now();
+    final currentTime = Duration(hours: now.hour, minutes: now.minute);
+    if (type.bedtime <= type.waketime) {
+      return currentTime >= type.bedtime && currentTime < type.waketime;
+    } else {
+      return currentTime >= type.bedtime || currentTime < type.waketime;
+    }
+  }
+
+  String get assetPath => '${type.assetPath}/${mood.name}.png';
 
   void decayStats() {
     hunger = (hunger - 5).clamp(0, 100);
     happiness = (happiness - 3).clamp(0, 100);
-    energy = (energy - 2).clamp(0, 100);
   }
 
   void feed() {
@@ -80,13 +80,8 @@ class Pet {
 
   void play() {
     happiness = (happiness + 20).clamp(0, 100);
-    energy = (energy - 10).clamp(0, 100);
     hunger = (hunger - 5).clamp(0, 100);
     xp += 5;
-  }
-
-  void sleep() {
-    energy = (energy + 30).clamp(0, 100);
   }
 
   void evolve() {
@@ -105,7 +100,6 @@ class Pet {
     final tickCount = elapsed.inSeconds ~/ 5;
     hunger = (hunger - 5 * tickCount).clamp(0, 100);
     happiness = (happiness - 3 * tickCount).clamp(0, 100);
-    energy = (energy - 2 * tickCount).clamp(0, 100);
 
     ageInMinutes += elapsed.inMinutes;
     evolve();
@@ -117,18 +111,16 @@ class Pet {
     'stage': stage.name,
     'hunger': hunger,
     'happiness': happiness,
-    'energy': energy,
     'ageInMinutes': ageInMinutes,
     'xp': xp,
   };
 
   factory Pet.fromJson(Map<String, dynamic> json) => Pet(
     name: json['name'] as String,
-    type: PetType.values.byName(json['type'] as String),
+    type: blob,
     stage: PetStage.values.byName(json['stage'] as String),
     hunger: json['hunger'] as int,
     happiness: json['happiness'] as int,
-    energy: json['energy'] as int,
     ageInMinutes: json['ageInMinutes'] as int,
     xp: json['xp'] as int,
   );
