@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 class UserActions extends StatelessWidget {
   final VoidCallback onFeed;
   final VoidCallback onPlay;
-  final VoidCallback onSleep;
+  final bool isSleeping;
 
   const UserActions({
     super.key,
     required this.onFeed,
     required this.onPlay,
-    required this.onSleep,
+    this.isSleeping = false,
   });
 
   @override
@@ -17,9 +17,14 @@ class UserActions extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        ElevatedButton(onPressed: onFeed, child: const Text("Feed")),
-        ElevatedButton(onPressed: onPlay, child: const Text("Play")),
-        ElevatedButton(onPressed: onSleep, child: const Text("Sleep")),
+        ElevatedButton(
+          onPressed: isSleeping ? null : onFeed,
+          child: const Text("Feed"),
+        ),
+        ElevatedButton(
+          onPressed: isSleeping ? null : onPlay,
+          child: const Text("Play"),
+        ),
       ],
     );
   }

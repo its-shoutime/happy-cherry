@@ -46,7 +46,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _loadGame() async {
     final loadedPet = await GameState.loadPet();
     setState(() {
-      pet = loadedPet ?? Pet(name: "Mochi", type: PetType.blob);
+      pet = loadedPet ?? Pet(name: "Mochi");
       timeTracker = PetTimeTracker(pet: pet, onTick: _onTick);
       timeTracker.start();
       _isLoading = false;
@@ -137,21 +137,17 @@ class _HomePageState extends State<HomePage> {
 
             buildStatBar("Hunger", pet.hunger),
             buildStatBar("Happiness", pet.happiness),
-            buildStatBar("Energy", pet.energy),
 
             const Spacer(),
 
             UserActions(
+              isSleeping: pet.mood == PetMood.sleeping,
               onFeed: () {
                 setState(() => pet.feed());
                 GameState.savePet(pet);
               },
               onPlay: () {
                 setState(() => pet.play());
-                GameState.savePet(pet);
-              },
-              onSleep: () {
-                setState(() => pet.sleep());
                 GameState.savePet(pet);
               },
             ),
