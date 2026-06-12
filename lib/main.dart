@@ -6,13 +6,21 @@ import 'time_tracker.dart';
 import 'game_state.dart';
 import 'info_button.dart';
 import 'rename_button.dart';
+import 'login.dart';
 
 void main() {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  bool isLoggedIn = false;
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +28,15 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Happy Cherry',
       theme: ThemeData(colorSchemeSeed: Colors.pink, useMaterial3: true),
-      home: const HomePage(),
+      home: isLoggedIn
+          ? const HomePage()
+          : LoginPage(
+              onLogin: () {
+                setState(() {
+                  isLoggedIn = true;
+                });
+              },
+            ),
     );
   }
 }
