@@ -7,6 +7,7 @@ import 'game_state.dart';
 import 'info_button.dart';
 import 'rename_button.dart';
 import 'login.dart';
+import 'death.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
@@ -58,6 +59,7 @@ class _HomePageState extends State<HomePage> {
   late Pet pet;
   late PetTimeTracker timeTracker;
   bool _isLoading = true;
+  bool _isDead = false;
 
   @override
   void initState() {
@@ -69,11 +71,30 @@ class _HomePageState extends State<HomePage> {
     final loadedPet = await GameState.loadPet();
     setState(() {
       pet = loadedPet ?? Pet(name: "Mochi");
-      timeTracker = PetTimeTracker(pet: pet, onTick: _onTick);
+      timeTracker = PetTimeTracker(pet: pet, onTick: _onTick, onDeath: _onDeath);
       timeTracker.start();
       _isLoading = false;
     });
     await GameState.savePet(pet);
+  }
+
+  void _onDeath() {
+    setState(() {
+      _isDead = true;
+    });
+    // Persist the dead state if desired.
+    GameState.savePet(pet);
+  }
+
+  void _restartFromDeath() {
+    timeTracker.stop();
+    setState(() {
+      pet = Pet(name: "Mochi");
+      _isDead = false;
+      timeTracker = PetTimeTracker(pet: pet, onTick: _onTick, onDeath: _onDeath);
+      timeTracker.start();
+    });
+    GameState.savePet(pet);
   }
 
   void _onTick() {
@@ -121,6 +142,9 @@ class _HomePageState extends State<HomePage> {
         backgroundColor: const Color.fromARGB(255, 205, 150, 168),
         body: const Center(child: CircularProgressIndicator()),
       );
+    }
+    if (_isDead) {
+      return DeathScreen(onRestart: _restartFromDeath);
     }
 
     return Scaffold(

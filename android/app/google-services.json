@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "531974328621",
+    "project_id": "happy-cherry",
+    "storage_bucket": "happy-cherry.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:531974328621:android:f5c9694605a086d0d183a4",
+        "android_client_info": {
+          "package_name": "com.example.happy_cherry"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAFsA6qyOkzvFgqbcEfw2TrtYWD_ljjRF4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
