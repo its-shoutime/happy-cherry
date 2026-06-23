@@ -19,7 +19,7 @@ class PetType {
 const PetType blob = PetType(
   name: 'Blob',
   assetPath: 'assets/pets/blob',
-  bedtime: Duration(hours: 22),
+  bedtime: Duration(hours: 22), //10pm-8am
   waketime: Duration(hours: 8),
   stage: PetStage.baby,
 );

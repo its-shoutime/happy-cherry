@@ -85,24 +85,117 @@ class _HomePageState extends State<HomePage> {
     return PetGraphic(pet: pet, height: 200);
   }
 
-  Widget buildStatBar(String label, int value) {
+  Color get bodyTextColor => pet.lightsOn ? Colors.black : Colors.white;
+
+  Widget buildHeartMeter(String label, double value, Color textColor) {
+    final heartUnits = value / 25.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text("$label: $value", style: const TextStyle(fontSize: 18)),
+        Text("$label", style: TextStyle(fontSize: 18, color: textColor)),
 
         const SizedBox(height: 5),
 
-        SizedBox(
-          width: 150,
-          child: LinearProgressIndicator(
-            value: value / 100,
-            minHeight: 5,
-            borderRadius: BorderRadius.circular(10),
-          ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(4, (index) {
+            final heartValue = (heartUnits - index).clamp(0.0, 1.0);
+            if (heartValue >= 1.0) {
+              return const Icon(Icons.favorite, color: Colors.red, size: 28);
+            }
+            if (heartValue >= 0.5) {
+              return buildHalfHeart();
+            }
+            return const Icon(Icons.favorite_border, color: Colors.red, size: 28);
+          }),
         ),
 
         const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget buildHalfHeart() {
+    return Stack(
+      alignment: Alignment.centerLeft,
+      children: [
+        const Icon(Icons.favorite_border, color: Colors.red, size: 28),
+        ClipRect(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            widthFactor: 0.5,
+            child: const Icon(Icons.favorite, color: Colors.red, size: 28),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget buildPoopDisplay() {
+    if (pet.poopCount <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("Poop", style: TextStyle(fontSize: 18, color: bodyTextColor)),
+        const SizedBox(height: 5),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(pet.poopCount, (index) {
+            return const Padding(
+              padding: EdgeInsets.only(right: 8),
+              child: Text('💩', style: TextStyle(fontSize: 28)),
+            );
+          }),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget buildAttentionIndicator() {
+    final active = pet.attentionVisible;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.notification_important,
+          color: active ? Colors.red : bodyTextColor,
+          size: 30,
+        ),
+        const SizedBox(width: 8),
+        Text(
+          active ? 'Attention needed' : 'All good',
+          style: TextStyle(
+            color: active ? Colors.red : bodyTextColor,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget buildLightsControl() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text('Lights', style: TextStyle(fontSize: 16, color: bodyTextColor)),
+        Switch(
+          value: pet.lightsOn,
+          onChanged: (value) {
+            setState(() {
+              pet.lightsOn = value;
+              if (!pet.hasAttentionCondition) {
+                pet.attentionSuppressed = false;
+                pet.attentionSeconds = 0;
+              }
+              GameState.savePet(pet);
+            });
+          },
+        ),
       ],
     );
   }
@@ -132,7 +225,7 @@ class _HomePageState extends State<HomePage> {
           InfoButton(pet: pet),
         ],
       ),
-      backgroundColor: const Color.fromARGB(255, 205, 150, 168),
+      backgroundColor: pet.lightsOn ? const Color.fromARGB(255, 205, 150, 168) : Colors.black,
 
       body: Padding(
         padding: const EdgeInsets.all(24),
@@ -146,24 +239,37 @@ class _HomePageState extends State<HomePage> {
 
             Text(
               pet.feels,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: bodyTextColor),
             ),
 
             const SizedBox(height: 40),
 
-            buildStatBar("Hunger", pet.hunger),
-            buildStatBar("Happiness", pet.happiness),
+            buildHeartMeter("Hunger", pet.hunger, bodyTextColor),
+            buildHeartMeter("Happiness", pet.happiness, bodyTextColor),
+            buildPoopDisplay(),
+            buildAttentionIndicator(),
+            const SizedBox(height: 16),
+            buildLightsControl(),
 
             const Spacer(),
 
             UserActions(
               isSleeping: pet.mood == PetMood.sleeping,
+              canHeal: pet.isSick,
               onFeed: () {
                 setState(() => pet.feed());
                 GameState.savePet(pet);
               },
               onPlay: () {
                 setState(() => pet.play());
+                GameState.savePet(pet);
+              },
+              onClean: () {
+                setState(() => pet.cleanPoop());
+                GameState.savePet(pet);
+              },
+              onHeal: () {
+                setState(() => pet.heal());
                 GameState.savePet(pet);
               },
             ),
