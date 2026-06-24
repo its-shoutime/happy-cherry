@@ -53,6 +53,8 @@ class _HomePageState extends State<HomePage> {
   late Pet pet;
   late PetTimeTracker timeTracker;
   bool _isLoading = true;
+  bool _showFood = false;
+  bool _showStars = false;
 
   @override
   void initState() {
@@ -83,7 +85,12 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget buildPetGraphic() {
-    return PetGraphic(pet: pet, height: 200);
+    return PetGraphic(
+      pet: pet,
+      height: 200,
+      showFood: _showFood,
+      showStars: _showStars,
+    );
   }
 
   Color get bodyTextColor => pet.lightsOff ? Colors.black : Colors.white;
@@ -91,7 +98,7 @@ class _HomePageState extends State<HomePage> {
   Widget buildHeartMeter(String label, double value, Color textColor) {
     final heartUnits = value / 25.0;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(label, style: TextStyle(fontSize: 18, color: textColor)),
 
@@ -237,57 +244,86 @@ class _HomePageState extends State<HomePage> {
 
       body: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            const Spacer(),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // top spacing
+              const SizedBox(height: 20),
 
-            buildPetGraphic(),
+              // pet graphic
+              Center(child: buildPetGraphic()),
 
-            const SizedBox(height: 20),
+              const SizedBox(height: 20),
 
-            Text(
-              pet.feels,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: bodyTextColor,
+              // pet mood
+              Text(
+                pet.feels,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: bodyTextColor,
+                ),
               ),
-            ),
 
-            const SizedBox(height: 40),
+              const SizedBox(height: 24),
 
-            buildHeartMeter("Hunger", pet.hunger, bodyTextColor),
-            buildHeartMeter("Happiness", pet.happiness, bodyTextColor),
-            buildAttentionIndicator(),
-            const SizedBox(height: 16),
-            if (DateTime.now().hour >= 23 || DateTime.now().hour < 8)
-              buildLightsControl(),
+              buildHeartMeter("Hunger", pet.hunger, bodyTextColor),
+              buildHeartMeter("Happiness", pet.happiness, bodyTextColor),
+              buildAttentionIndicator(),
+              const SizedBox(height: 16),
+              if (DateTime.now().hour >= 23 || DateTime.now().hour < 8)
+                buildLightsControl(),
 
-            const Spacer(),
+              const SizedBox(height: 18),
 
-            UserActions(
-              isSleeping: pet.mood == PetMood.sleeping,
-              canHeal: pet.isSick,
-              onFeed: () {
-                setState(() => pet.feed());
-                GameState.savePet(pet);
-              },
-              onPlay: () {
-                setState(() => pet.play());
-                GameState.savePet(pet);
-              },
-              onClean: () {
-                setState(() => pet.cleanPoop());
-                GameState.savePet(pet);
-              },
-              onHeal: () {
-                setState(() => pet.heal());
-                GameState.savePet(pet);
-              },
-            ),
+              UserActions(
+                isSleeping: pet.mood == PetMood.sleeping,
+                canHeal: pet.isSick,
+                onFeed: () {
+                  if (pet.hunger < 100) {
+                    setState(() {
+                      pet.feed();
+                      _showFood = true;
+                    });
+                    GameState.savePet(pet);
+                    Future.delayed(const Duration(seconds: 2), () {
+                      if (!mounted) return;
+                      setState(() => _showFood = false);
+                    });
+                  }
+                },
+                onPlay: () {
+                  if (pet.happiness < 100) {
+                    setState(() {
+                      pet.play();
+                      _showStars = true;
+                    });
+                    GameState.savePet(pet);
+                    Future.delayed(const Duration(seconds: 2), () {
+                      if (!mounted) return;
+                      setState(() => _showStars = false);
+                    });
+                  } else {
+                    // still play action even if full, keep original behavior
+                    setState(() => pet.play());
+                    GameState.savePet(pet);
+                  }
+                },
+                onClean: () {
+                  setState(() => pet.cleanPoop());
+                  GameState.savePet(pet);
+                },
+                onHeal: () {
+                  setState(() => pet.heal());
+                  GameState.savePet(pet);
+                },
+              ),
 
-            const SizedBox(height: 30),
-          ],
+              const SizedBox(height: 30),
+            ],
+          ),
         ),
       ),
     );

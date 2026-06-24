@@ -91,7 +91,7 @@ class Pet {
   bool get hasAttentionCondition {
     return hunger <= 0 ||
         happiness <= 0 ||
-        poopCount > 0 ||
+        poopCount > 3 ||
         (isAsleep && !lightsOff);
   }
 
