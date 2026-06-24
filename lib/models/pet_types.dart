@@ -3,15 +3,15 @@ enum PetStage { baby, child, teen, adult }
 class PetType {
   final String name;
   final String assetPath;
-  final Duration bedtime;
-  final Duration waketime;
+  final Duration bedTime;
+  final Duration wakeTime;
   final PetStage stage;
 
   const PetType({
     required this.name,
     required this.assetPath,
-    required this.bedtime,
-    required this.waketime,
+    required this.bedTime,
+    required this.wakeTime,
     required this.stage,
   });
 }
@@ -19,7 +19,18 @@ class PetType {
 const PetType blob = PetType(
   name: 'Blob',
   assetPath: 'assets/pets/blob',
-  bedtime: Duration(hours: 22), //10pm-8am
-  waketime: Duration(hours: 8),
+  bedTime: Duration(hours: 23), //10pm-8am
+  wakeTime: Duration(hours: 8),
   stage: PetStage.baby,
 );
+
+const List<PetType> allPetTypes = [blob];
+
+PetType petTypeFromName(String? name) {
+  if (name == null) return blob;
+  final key = name.toLowerCase();
+  return allPetTypes.firstWhere(
+    (t) => t.name.toLowerCase() == key,
+    orElse: () => blob,
+  );
+}

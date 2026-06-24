@@ -81,15 +81,18 @@ class Pet {
   bool get isAsleep {
     final now = DateTime.now();
     final currentTime = Duration(hours: now.hour, minutes: now.minute);
-    if (type.bedtime <= type.waketime) {
-      return currentTime >= type.bedtime && currentTime < type.waketime;
+    if (type.bedTime <= type.wakeTime) {
+      return currentTime >= type.bedTime && currentTime < type.wakeTime;
     } else {
-      return currentTime >= type.bedtime || currentTime < type.waketime;
+      return currentTime >= type.bedTime || currentTime < type.wakeTime;
     }
   }
 
   bool get hasAttentionCondition {
-    return hunger <= 0 || happiness <= 0 || poopCount > 0 || (isAsleep && lightsOn);
+    return hunger <= 0 ||
+        happiness <= 0 ||
+        poopCount > 0 ||
+        (isAsleep && lightsOn);
   }
 
   bool get attentionVisible {
@@ -169,7 +172,10 @@ class Pet {
   void decayStats([Duration elapsed = const Duration(seconds: 5)]) {
     final minutes = elapsed.inSeconds / 60.0;
     hunger = (hunger - hungerDecayRatePerMinute * minutes).clamp(0.0, 100.0);
-    happiness = (happiness - happinessDecayRatePerMinute * minutes).clamp(0.0, 100.0);
+    happiness = (happiness - happinessDecayRatePerMinute * minutes).clamp(
+      0.0,
+      100.0,
+    );
     advancePoopTimer(elapsed);
     updateAttention(elapsed);
   }
@@ -240,7 +246,7 @@ class Pet {
 
   factory Pet.fromJson(Map<String, dynamic> json) => Pet(
     name: json['name'] as String,
-    type: blob,
+    type: petTypeFromName(json['type'] as String?),
     stage: PetStage.values.byName(json['stage'] as String),
     hunger: (json['hunger'] as num).toDouble(),
     happiness: (json['happiness'] as num).toDouble(),

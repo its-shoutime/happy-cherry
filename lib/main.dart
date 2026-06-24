@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
-import 'models/pet.dart';
-import 'pet_animation.dart';
-import 'user_input.dart';
-import 'time_tracker.dart';
+
 import 'game_state.dart';
 import 'info_button.dart';
-import 'rename_button.dart';
 import 'login.dart';
+import 'models/pet.dart';
+import 'pet_animation.dart';
+import 'rename_button.dart';
+import 'time_tracker.dart';
+import 'user_input.dart';
 
 void main() {
   runApp(const MyApp());
@@ -92,7 +93,7 @@ class _HomePageState extends State<HomePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text("$label", style: TextStyle(fontSize: 18, color: textColor)),
+        Text(label, style: TextStyle(fontSize: 18, color: textColor)),
 
         const SizedBox(height: 5),
 
@@ -106,7 +107,11 @@ class _HomePageState extends State<HomePage> {
             if (heartValue >= 0.5) {
               return buildHalfHeart();
             }
-            return const Icon(Icons.favorite_border, color: Colors.red, size: 28);
+            return const Icon(
+              Icons.favorite_border,
+              color: Colors.red,
+              size: 28,
+            );
           }),
         ),
 
@@ -156,20 +161,21 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget buildAttentionIndicator() {
-    final active = pet.attentionVisible;
+    // Show attention when there are 2 full hearts or less remaining.
+    // Each full heart represents 25 points, so 2 full hearts = 50.
+    final lowHearts = pet.hunger <= 50 || pet.happiness <= 50;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(
-          Icons.notification_important,
-          color: active ? Colors.red : bodyTextColor,
-          size: 30,
-        ),
-        const SizedBox(width: 8),
+        if (lowHearts) ...[
+          Icon(Icons.notification_important, color: Colors.red, size: 30),
+          const SizedBox(width: 8),
+        ],
         Text(
-          active ? 'Attention needed' : 'All good',
+          lowHearts ? 'Attention needed' : 'All good!',
           style: TextStyle(
-            color: active ? Colors.red : bodyTextColor,
+            color: lowHearts ? Colors.red : bodyTextColor,
             fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
@@ -225,7 +231,9 @@ class _HomePageState extends State<HomePage> {
           InfoButton(pet: pet),
         ],
       ),
-      backgroundColor: pet.lightsOn ? const Color.fromARGB(255, 205, 150, 168) : Colors.black,
+      backgroundColor: pet.lightsOn
+          ? const Color.fromARGB(255, 205, 150, 168)
+          : Colors.black,
 
       body: Padding(
         padding: const EdgeInsets.all(24),
@@ -239,7 +247,11 @@ class _HomePageState extends State<HomePage> {
 
             Text(
               pet.feels,
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: bodyTextColor),
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: bodyTextColor,
+              ),
             ),
 
             const SizedBox(height: 40),
@@ -249,7 +261,7 @@ class _HomePageState extends State<HomePage> {
             buildPoopDisplay(),
             buildAttentionIndicator(),
             const SizedBox(height: 16),
-            buildLightsControl(),
+            if (Duration(hours: 23) < Duration(hours: 8)) buildLightsControl(),
 
             const Spacer(),
 
