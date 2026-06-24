@@ -17,7 +17,7 @@ class Pet {
   int poopCount;
   int secondsSinceLastPoop;
   bool isSick;
-  bool lightsOn;
+  bool lightsOff;
   int careMistakes;
   int attentionSeconds;
   bool attentionSuppressed;
@@ -33,7 +33,7 @@ class Pet {
     this.poopCount = 0,
     this.secondsSinceLastPoop = 0,
     this.isSick = false,
-    this.lightsOn = false,
+    this.lightsOff = false,
     this.careMistakes = 0,
     this.attentionSeconds = 0,
     this.attentionSuppressed = false,
@@ -48,7 +48,7 @@ class Pet {
       return PetMood.sleeping;
     }
 
-    if (secondsSinceLastPoop >= 240 * 60 && poopCount >= 3) {
+    if (secondsSinceLastPoop >= 120 && poopCount >= 3) {
       return PetMood.sick;
     }
 
@@ -92,7 +92,7 @@ class Pet {
     return hunger <= 0 ||
         happiness <= 0 ||
         poopCount > 0 ||
-        (isAsleep && lightsOn);
+        (isAsleep && !lightsOff);
   }
 
   bool get attentionVisible {
@@ -150,7 +150,7 @@ class Pet {
     if (elapsed.isNegative) return;
 
     if (poopCount >= 3) {
-      secondsSinceLastPoop = 240 * 60;
+      secondsSinceLastPoop = 120;
       if (!isSick) {
         isSick = true;
       }
@@ -158,14 +158,14 @@ class Pet {
     }
 
     secondsSinceLastPoop += elapsed.inSeconds;
-    while (secondsSinceLastPoop >= 240 * 60 && poopCount < 3) {
+    while (secondsSinceLastPoop >= 120 && poopCount < 3) {
       poopCount += 1;
-      secondsSinceLastPoop -= 240 * 60;
+      secondsSinceLastPoop -= 120;
     }
 
     if (poopCount >= 3 && !isSick) {
       isSick = true;
-      secondsSinceLastPoop = 240 * 60;
+      secondsSinceLastPoop = 120;
     }
   }
 
@@ -217,10 +217,10 @@ class Pet {
     }
   }
 
-  void advanceTime(Duration elapsed, {bool lightsOn = false}) {
+  void advanceTime(Duration elapsed, {bool lightsOff = false}) {
     if (elapsed.isNegative) return;
 
-    this.lightsOn = lightsOn;
+    this.lightsOff = !lightsOff;
     decayStats(elapsed);
 
     ageInMinutes += elapsed.inMinutes;
@@ -238,7 +238,7 @@ class Pet {
     'poopCount': poopCount,
     'secondsSinceLastPoop': secondsSinceLastPoop,
     'isSick': isSick,
-    'lightsOn': lightsOn,
+    'lightsOff': lightsOff,
     'careMistakes': careMistakes,
     'attentionSeconds': attentionSeconds,
     'attentionSuppressed': attentionSuppressed,
@@ -255,7 +255,7 @@ class Pet {
     poopCount: json['poopCount'] as int? ?? 0,
     secondsSinceLastPoop: json['secondsSinceLastPoop'] as int? ?? 0,
     isSick: json['isSick'] as bool? ?? false,
-    lightsOn: json['lightsOn'] as bool? ?? false,
+    lightsOff: json['lightsOff'] as bool? ?? false,
     careMistakes: json['careMistakes'] as int? ?? 0,
     attentionSeconds: json['attentionSeconds'] as int? ?? 0,
     attentionSuppressed: json['attentionSuppressed'] as bool? ?? false,

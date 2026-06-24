@@ -86,7 +86,7 @@ class _HomePageState extends State<HomePage> {
     return PetGraphic(pet: pet, height: 200);
   }
 
-  Color get bodyTextColor => pet.lightsOn ? Colors.black : Colors.white;
+  Color get bodyTextColor => pet.lightsOff ? Colors.black : Colors.white;
 
   Widget buildHeartMeter(String label, double value, Color textColor) {
     final heartUnits = value / 25.0;
@@ -190,10 +190,10 @@ class _HomePageState extends State<HomePage> {
       children: [
         Text('Lights', style: TextStyle(fontSize: 16, color: bodyTextColor)),
         Switch(
-          value: pet.lightsOn,
+          value: pet.lightsOff,
           onChanged: (value) {
             setState(() {
-              pet.lightsOn = value;
+              pet.lightsOff = !value;
               if (!pet.hasAttentionCondition) {
                 pet.attentionSuppressed = false;
                 pet.attentionSeconds = 0;
@@ -231,9 +231,9 @@ class _HomePageState extends State<HomePage> {
           InfoButton(pet: pet),
         ],
       ),
-      backgroundColor: pet.lightsOn
-          ? const Color.fromARGB(255, 205, 150, 168)
-          : Colors.black,
+      backgroundColor: pet.lightsOff
+          ? Colors.black
+          : const Color.fromARGB(255, 205, 150, 168),
 
       body: Padding(
         padding: const EdgeInsets.all(24),
@@ -258,10 +258,10 @@ class _HomePageState extends State<HomePage> {
 
             buildHeartMeter("Hunger", pet.hunger, bodyTextColor),
             buildHeartMeter("Happiness", pet.happiness, bodyTextColor),
-            buildPoopDisplay(),
             buildAttentionIndicator(),
             const SizedBox(height: 16),
-            if (Duration(hours: 23) < Duration(hours: 8)) buildLightsControl(),
+            if (DateTime.now().hour >= 23 || DateTime.now().hour < 8)
+              buildLightsControl(),
 
             const Spacer(),
 
