@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'game.dart';
 import 'game_state.dart';
 import 'info_button.dart';
 import 'login.dart';
@@ -294,21 +294,24 @@ class _HomePageState extends State<HomePage> {
                     });
                   }
                 },
-                onPlay: () {
-                  if (pet.happiness < 100) {
+                onPlay: () async {
+                  final score = await Navigator.of(context).push<int>(
+                    MaterialPageRoute(builder: (_) => const CherryCatchGame()),
+                  );
+                  if (score != null && score > 3) {
                     setState(() {
+                      if (pet.happiness < 100) {
+                        _showStars = true;
+                      }
                       pet.play();
-                      _showStars = true;
                     });
                     GameState.savePet(pet);
-                    Future.delayed(const Duration(seconds: 2), () {
-                      if (!mounted) return;
-                      setState(() => _showStars = false);
-                    });
-                  } else {
-                    // still play action even if full, keep original behavior
-                    setState(() => pet.play());
-                    GameState.savePet(pet);
+                    if (_showStars) {
+                      Future.delayed(const Duration(seconds: 2), () {
+                        if (!mounted) return;
+                        setState(() => _showStars = false);
+                      });
+                    }
                   }
                 },
                 onClean: () {
