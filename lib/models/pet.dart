@@ -118,6 +118,8 @@ class Pet {
     }
   }
 
+  bool get isDead => hunger == 0 && happiness == 0;
+
   String get assetPath => '${type.assetPath}/${mood.name}.png';
 
   double get hungerDecayRatePerMinute {
