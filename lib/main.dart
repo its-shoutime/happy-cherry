@@ -1,32 +1,25 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'models/pet.dart';
-import 'pet_animation.dart';
-import 'user_input.dart';
-import 'time_tracker.dart';
+
+import 'firebase_options.dart';
 import 'game_state.dart';
 import 'info_button.dart';
-import 'rename_button.dart';
 import 'login.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
+import 'models/pet.dart';
+import 'pet_animation.dart';
+import 'rename_button.dart';
+import 'time_tracker.dart';
+import 'user_input.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
   runApp(const MyApp());
 }
 
-class MyApp extends StatefulWidget {
+class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  bool isLoggedIn = false;
 
   @override
   Widget build(BuildContext context) {
@@ -34,21 +27,36 @@ class _MyAppState extends State<MyApp> {
       debugShowCheckedModeBanner: false,
       title: 'Happy Cherry',
       theme: ThemeData(colorSchemeSeed: Colors.pink, useMaterial3: true),
-      home: isLoggedIn
-          ? const HomePage()
-          : LoginPage(
-              onLogin: () {
-                setState(() {
-                  isLoggedIn = true;
-                });
-              },
-            ),
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+
+          final user = snapshot.data;
+          if (user == null) {
+            return const LoginPage();
+          }
+
+          return HomePage(userId: user.uid, onLogout: _handleLogout);
+        },
+      ),
     );
+  }
+
+  Future<void> _handleLogout() async {
+    await FirebaseAuth.instance.signOut();
   }
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final String userId;
+  final Future<void> Function() onLogout;
+
+  const HomePage({super.key, required this.userId, required this.onLogout});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -66,19 +74,19 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadGame() async {
-    final loadedPet = await GameState.loadPet();
+    final loadedPet = await GameState.loadPet(userId: widget.userId);
     setState(() {
       pet = loadedPet ?? Pet(name: "Mochi");
       timeTracker = PetTimeTracker(pet: pet, onTick: _onTick);
       timeTracker.start();
       _isLoading = false;
     });
-    await GameState.savePet(pet);
+    await GameState.savePet(pet, userId: widget.userId);
   }
 
   void _onTick() {
     setState(() {});
-    GameState.savePet(pet);
+    GameState.savePet(pet, userId: widget.userId);
   }
 
   @override
@@ -132,10 +140,15 @@ class _HomePageState extends State<HomePage> {
             pet: pet,
             onRename: (newName) {
               setState(() => pet.name = newName);
-              GameState.savePet(pet);
+              GameState.savePet(pet, userId: widget.userId);
             },
           ),
           InfoButton(pet: pet),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: widget.onLogout,
+          ),
         ],
       ),
       backgroundColor: const Color.fromARGB(255, 205, 150, 168),
@@ -166,11 +179,11 @@ class _HomePageState extends State<HomePage> {
               isSleeping: pet.mood == PetMood.sleeping,
               onFeed: () {
                 setState(() => pet.feed());
-                GameState.savePet(pet);
+                GameState.savePet(pet, userId: widget.userId);
               },
               onPlay: () {
                 setState(() => pet.play());
-                GameState.savePet(pet);
+                GameState.savePet(pet, userId: widget.userId);
               },
             ),
 

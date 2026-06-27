@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+
+import 'game_state.dart';
 
 class LoginPage extends StatefulWidget {
-  final VoidCallback onLogin;
-
-  const LoginPage({super.key, required this.onLogin});
+  const LoginPage({super.key});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -21,10 +20,47 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  Future<void> _showMessage(String message) async {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _login() async {
+    final username = usernameController.text.trim();
+    final password = passwordController.text;
+    if (username.isEmpty || password.isEmpty) {
+      await _showMessage('Enter username and password.');
+      return;
+    }
+
+    final normalizedUsername = username.toLowerCase();
+    final success = await GameState.loginUser(normalizedUsername, password);
+    if (!success) {
+      await _showMessage('Login failed. Check your username and password.');
+    }
+  }
+
+  Future<void> _signUp() async {
+    final username = usernameController.text.trim();
+    final password = passwordController.text;
+    if (username.isEmpty || password.isEmpty) {
+      await _showMessage('Enter username and password.');
+      return;
+    }
+
+    final normalizedUsername = username.toLowerCase();
+    final created = await GameState.registerUser(normalizedUsername, password);
+    if (!created) {
+      await _showMessage('That username is already taken or invalid.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("owner login")),
+      appBar: AppBar(title: const Text('Owner login')),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -32,7 +68,7 @@ class _LoginPageState extends State<LoginPage> {
           children: [
             TextField(
               controller: usernameController,
-              decoration: const InputDecoration(labelText: "username"),
+              decoration: const InputDecoration(labelText: 'Email or username'),
             ),
 
             const SizedBox(height: 20),
@@ -40,57 +76,33 @@ class _LoginPageState extends State<LoginPage> {
             TextField(
               controller: passwordController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: "password"),
+              decoration: const InputDecoration(labelText: 'Password'),
             ),
 
             const SizedBox(height: 20),
 
             ElevatedButton(
-              onPressed: () async {
-                try {
-                  await FirebaseAuth.instance.signInWithEmailAndPassword(
-                    email: usernameController.text,
-                    password: passwordController.text,
-                  );
-                  widget.onLogin();
-                } catch (e) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text("Login failed: $e")));
-                }
-              },
+              onPressed: _login,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 40,
                   vertical: 16,
                 ),
               ),
-              child: const Text("login"),
+              child: const Text('Login'),
             ),
 
             const SizedBox(height: 12),
 
             ElevatedButton(
-              onPressed: () async {
-                try {
-                  await FirebaseAuth.instance.createUserWithEmailAndPassword(
-                    email: usernameController.text,
-                    password: passwordController.text,
-                  );
-                  widget.onLogin();
-                } catch (e) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text("Sign-up failed: $e")));
-                }
-              },
+              onPressed: _signUp,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 40,
                   vertical: 16,
                 ),
               ),
-              child: const Text("sign up"),
+              child: const Text('Sign up'),
             ),
           ],
         ),
