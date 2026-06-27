@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
-import 'models/pet.dart';
-import 'pet_animation.dart';
-import 'user_input.dart';
-import 'time_tracker.dart';
+import 'game.dart';
 import 'game_state.dart';
 import 'info_button.dart';
-import 'rename_button.dart';
 import 'login.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'models/pet.dart';
+import 'pet_animation.dart';
+import 'rename_button.dart';
+import 'time_tracker.dart';
+import 'user_input.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -58,6 +59,8 @@ class _HomePageState extends State<HomePage> {
   late Pet pet;
   late PetTimeTracker timeTracker;
   bool _isLoading = true;
+  bool _showFood = false;
+  bool _showStars = false;
 
   @override
   void initState() {
@@ -88,27 +91,130 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget buildPetGraphic() {
-    return PetGraphic(pet: pet, height: 200);
+    return PetGraphic(
+      pet: pet,
+      height: 200,
+      showFood: _showFood,
+      showStars: _showStars,
+    );
   }
 
-  Widget buildStatBar(String label, int value) {
+  Color get bodyTextColor => pet.lightsOff ? Colors.black : Colors.white;
+
+  Widget buildHeartMeter(String label, double value, Color textColor) {
+    final heartUnits = value / 25.0;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text("$label: $value", style: const TextStyle(fontSize: 18)),
+        Text(label, style: TextStyle(fontSize: 18, color: textColor)),
 
         const SizedBox(height: 5),
 
-        SizedBox(
-          width: 150,
-          child: LinearProgressIndicator(
-            value: value / 100,
-            minHeight: 5,
-            borderRadius: BorderRadius.circular(10),
-          ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(4, (index) {
+            final heartValue = (heartUnits - index).clamp(0.0, 1.0);
+            if (heartValue >= 1.0) {
+              return const Icon(Icons.favorite, color: Colors.red, size: 28);
+            }
+            if (heartValue >= 0.5) {
+              return buildHalfHeart();
+            }
+            return const Icon(
+              Icons.favorite_border,
+              color: Colors.red,
+              size: 28,
+            );
+          }),
         ),
 
         const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget buildHalfHeart() {
+    return Stack(
+      alignment: Alignment.centerLeft,
+      children: [
+        const Icon(Icons.favorite_border, color: Colors.red, size: 28),
+        ClipRect(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            widthFactor: 0.5,
+            child: const Icon(Icons.favorite, color: Colors.red, size: 28),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget buildPoopDisplay() {
+    if (pet.poopCount <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("Poop", style: TextStyle(fontSize: 18, color: bodyTextColor)),
+        const SizedBox(height: 5),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(pet.poopCount, (index) {
+            return const Padding(
+              padding: EdgeInsets.only(right: 8),
+              child: Text('💩', style: TextStyle(fontSize: 28)),
+            );
+          }),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget buildAttentionIndicator() {
+    // Show attention when there are 2 full hearts or less remaining.
+    // Each full heart represents 25 points, so 2 full hearts = 50.
+    final lowHearts = pet.hunger <= 50 || pet.happiness <= 50;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (lowHearts) ...[
+          Icon(Icons.notification_important, color: Colors.red, size: 30),
+          const SizedBox(width: 8),
+        ],
+        Text(
+          lowHearts ? 'Attention needed' : 'All good!',
+          style: TextStyle(
+            color: lowHearts ? Colors.red : bodyTextColor,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget buildLightsControl() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text('Lights', style: TextStyle(fontSize: 16, color: bodyTextColor)),
+        Switch(
+          value: pet.lightsOff,
+          onChanged: (value) {
+            setState(() {
+              pet.lightsOff = !value;
+              if (!pet.hasAttentionCondition) {
+                pet.attentionSuppressed = false;
+                pet.attentionSeconds = 0;
+              }
+              GameState.savePet(pet);
+            });
+          },
+        ),
       ],
     );
   }
@@ -138,44 +244,95 @@ class _HomePageState extends State<HomePage> {
           InfoButton(pet: pet),
         ],
       ),
-      backgroundColor: const Color.fromARGB(255, 205, 150, 168),
+      backgroundColor: pet.lightsOff
+          ? Colors.black
+          : const Color.fromARGB(255, 205, 150, 168),
 
       body: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            const Spacer(),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // top spacing
+              const SizedBox(height: 20),
 
-            buildPetGraphic(),
+              // pet graphic
+              Center(child: buildPetGraphic()),
 
-            const SizedBox(height: 20),
+              const SizedBox(height: 20),
 
-            Text(
-              pet.feels,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
+              // pet mood
+              Text(
+                pet.feels,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: bodyTextColor,
+                ),
+              ),
 
-            const SizedBox(height: 40),
+              const SizedBox(height: 24),
 
-            buildStatBar("Hunger", pet.hunger),
-            buildStatBar("Happiness", pet.happiness),
+              buildHeartMeter("Hunger", pet.hunger, bodyTextColor),
+              buildHeartMeter("Happiness", pet.happiness, bodyTextColor),
+              buildAttentionIndicator(),
+              const SizedBox(height: 16),
+              if (DateTime.now().hour >= 23 || DateTime.now().hour < 8)
+                buildLightsControl(),
 
-            const Spacer(),
+              const SizedBox(height: 18),
 
-            UserActions(
-              isSleeping: pet.mood == PetMood.sleeping,
-              onFeed: () {
-                setState(() => pet.feed());
-                GameState.savePet(pet);
-              },
-              onPlay: () {
-                setState(() => pet.play());
-                GameState.savePet(pet);
-              },
-            ),
+              UserActions(
+                isSleeping: pet.mood == PetMood.sleeping,
+                canHeal: pet.isSick,
+                onFeed: () {
+                  if (pet.hunger < 100) {
+                    setState(() {
+                      pet.feed();
+                      _showFood = true;
+                    });
+                    GameState.savePet(pet);
+                    Future.delayed(const Duration(seconds: 2), () {
+                      if (!mounted) return;
+                      setState(() => _showFood = false);
+                    });
+                  }
+                },
+                onPlay: () async {
+                  final score = await Navigator.of(context).push<int>(
+                    MaterialPageRoute(builder: (_) => const CherryCatchGame()),
+                  );
+                  if (score != null && score > 3) {
+                    setState(() {
+                      if (pet.happiness < 100) {
+                        _showStars = true;
+                      }
+                      pet.play();
+                    });
+                    GameState.savePet(pet);
+                    if (_showStars) {
+                      Future.delayed(const Duration(seconds: 2), () {
+                        if (!mounted) return;
+                        setState(() => _showStars = false);
+                      });
+                    }
+                  }
+                },
+                onClean: () {
+                  setState(() => pet.cleanPoop());
+                  GameState.savePet(pet);
+                },
+                onHeal: () {
+                  setState(() => pet.heal());
+                  GameState.savePet(pet);
+                },
+              ),
 
-            const SizedBox(height: 30),
-          ],
+              const SizedBox(height: 30),
+            ],
+          ),
         ),
       ),
     );
