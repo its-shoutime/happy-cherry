@@ -11,27 +11,25 @@ class RenameButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return IconButton(
       icon: const Icon(Icons.edit),
-      onPressed: () {
-        showDialog(
+      onPressed: () async {
+        final controller = TextEditingController(text: pet.name);
+        final result = await showDialog<String?>(
           context: context,
           builder: (_) {
-            String newName = pet.name;
             return AlertDialog(
               title: const Text("Rename Pet"),
               content: TextField(
-                onChanged: (value) => newName = value,
-                controller: TextEditingController(text: pet.name),
+                controller: controller,
                 decoration: const InputDecoration(labelText: "New Name"),
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () => Navigator.pop(context, null),
                   child: const Text("Cancel"),
                 ),
                 ElevatedButton(
                   onPressed: () {
-                    onRename(newName);
-                    Navigator.pop(context);
+                    Navigator.pop(context, controller.text);
                   },
                   child: const Text("Save"),
                 ),
@@ -39,6 +37,10 @@ class RenameButton extends StatelessWidget {
             );
           },
         );
+        if (result != null && result.isNotEmpty) {
+          onRename(result);
+        }
+        controller.dispose();
       },
     );
   }
