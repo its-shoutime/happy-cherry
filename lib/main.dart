@@ -75,18 +75,39 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    pet = Pet(name: "Mochi");
+    _startTimeTracker();
+    _loadCachedPet();
     _loadGame();
+  }
+
+  void _startTimeTracker() {
+    timeTracker = PetTimeTracker(pet: pet, onTick: _onTick);
+    timeTracker.start();
+  }
+
+  Future<void> _loadCachedPet() async {
+    final cachedPet = await GameState.loadCachedPet(userId: widget.userId);
+    if (!mounted || cachedPet == null) return;
+
+    timeTracker.stop();
+    setState(() {
+      pet = cachedPet;
+      _startTimeTracker();
+    });
   }
 
   Future<void> _loadGame() async {
     final loadedPet = await GameState.loadPet(userId: widget.userId);
+    if (!mounted || loadedPet == null) return;
+
+    timeTracker.stop();
     setState(() {
       pet = loadedPet ?? Pet(name: "Mochi");
       timeTracker = PetTimeTracker(pet: pet, onTick: _onTick, onDeath: _onDeath);
       timeTracker.start();
       _isLoading = false;
     });
-    await GameState.savePet(pet, userId: widget.userId);
   }
 
   void _onDeath() {
