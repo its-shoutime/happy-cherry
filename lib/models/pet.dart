@@ -48,10 +48,6 @@ class Pet {
       return PetMood.sleeping;
     }
 
-    if (secondsSinceLastPoop >= 120 && poopCount >= 3) {
-      return PetMood.sick;
-    }
-
     if (hunger <= 20 || happiness <= 20) {
       return PetMood.sad;
     }
@@ -91,7 +87,7 @@ class Pet {
   bool get hasAttentionCondition {
     return hunger <= 0 ||
         happiness <= 0 ||
-        poopCount > 3 ||
+        poopCount >= 3 ||
         (isAsleep && !lightsOff);
   }
 
@@ -119,6 +115,32 @@ class Pet {
   }
 
   bool get isDead => hunger == 0 && happiness == 0;
+
+  static const int _babyToChildAgeMinutes = 60;
+  static const int _childToTeenAgeMinutes = 24 * 60;
+  static const int _teenToAdultAgeMinutes = 3 * 24 * 60;
+
+  int get _evolutionAgeThresholdMinutes {
+    switch (stage) {
+      case PetStage.baby:
+        return _babyToChildAgeMinutes;
+      case PetStage.child:
+        return _childToTeenAgeMinutes;
+      case PetStage.teen:
+        return _teenToAdultAgeMinutes;
+      case PetStage.adult:
+        return -1;
+    }
+  }
+
+  bool get canEvolve =>
+      stage != PetStage.adult && ageInMinutes >= _evolutionAgeThresholdMinutes;
+
+  void maybeEvolve() {
+    while (canEvolve) {
+      evolve();
+    }
+  }
 
   String get assetPath => '${type.assetPath}/${mood.name}.png';
 
@@ -148,26 +170,21 @@ class Pet {
     }
   }
 
+  static const int _poopIntervalSeconds = 4 * 60 * 60;
+  static const int _sickAfterFullPoopSeconds = 4 * 60 * 60;
+
   void advancePoopTimer(Duration elapsed) {
     if (elapsed.isNegative) return;
 
-    if (poopCount >= 3) {
-      secondsSinceLastPoop = 120;
-      if (!isSick) {
-        isSick = true;
-      }
-      return;
-    }
-
     secondsSinceLastPoop += elapsed.inSeconds;
-    while (secondsSinceLastPoop >= 120 && poopCount < 3) {
+
+    while (secondsSinceLastPoop >= _poopIntervalSeconds && poopCount < 3) {
+      secondsSinceLastPoop -= _poopIntervalSeconds;
       poopCount += 1;
-      secondsSinceLastPoop -= 120;
     }
 
-    if (poopCount >= 3 && !isSick) {
+    if (poopCount >= 3 && secondsSinceLastPoop >= _sickAfterFullPoopSeconds) {
       isSick = true;
-      secondsSinceLastPoop = 120;
     }
   }
 
@@ -210,23 +227,64 @@ class Pet {
   }
 
   void evolve() {
-    if (ageInMinutes >= 60 && stage == PetStage.baby) {
-      stage = PetStage.child;
-    } else if (ageInMinutes >= 1440 && stage == PetStage.child) {
-      stage = PetStage.teen;
-    } else if (ageInMinutes >= 4320 && stage == PetStage.teen) {
-      stage = PetStage.adult;
+    switch (stage) {
+      case PetStage.baby:
+        type = careMistakes < 1 ? sprout : squeaky;
+        stage = PetStage.child;
+        break;
+      case PetStage.child:
+        if (careMistakes < 2) {
+          type = starfruit;
+        } else if (careMistakes >= 3 && careMistakes <= 4) {
+          type = mousse;
+        } else {
+          type = lloyd;
+        }
+        stage = PetStage.teen;
+        break;
+      case PetStage.teen:
+        if (type == starfruit) {
+          if (careMistakes == 0) {
+            type = cherry;
+          } else if (careMistakes >= 1 && careMistakes <= 3) {
+            type = flower;
+          } else {
+            type = angel;
+          }
+          stage = PetStage.adult;
+        } else if (type == lloyd) {
+          if (careMistakes >= 10) {
+            type = demon;
+            stage = PetStage.adult;
+          } else if (careMistakes >= 3 && careMistakes <= 6) {
+            type = puffaloo;
+            stage = PetStage.adult;
+          } else if (careMistakes >= 7) {
+            type = bear;
+            stage = PetStage.adult;
+          }
+        } else if (type == mousse) {
+          if (careMistakes >= 3 && careMistakes <= 6) {
+            type = puffaloo;
+            stage = PetStage.adult;
+          } else if (careMistakes >= 7) {
+            type = bear;
+            stage = PetStage.adult;
+          }
+        }
+        break;
+      case PetStage.adult:
+        break;
     }
   }
 
-  void advanceTime(Duration elapsed, {bool lightsOff = false}) {
+  void advanceTime(Duration elapsed) {
     if (elapsed.isNegative) return;
 
-    this.lightsOff = !lightsOff;
     decayStats(elapsed);
 
     ageInMinutes += elapsed.inMinutes;
-    evolve();
+    maybeEvolve();
   }
 
   Map<String, dynamic> toJson() => {

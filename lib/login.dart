@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:pixel_ui/pixel_ui.dart';
 
+import 'app_theme.dart';
 import 'game_state.dart';
 
 class LoginPage extends StatefulWidget {
@@ -60,7 +62,15 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Owner login')),
+      backgroundColor: AppTheme.backgroundPink,
+      appBar: AppBar(
+        backgroundColor: AppTheme.appBarPink,
+        foregroundColor: AppTheme.textDark,
+        title: Text(
+          'Owner login',
+          style: AppTheme.pixelText(fontSize: 20, color: AppTheme.textDark),
+        ),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -68,7 +78,14 @@ class _LoginPageState extends State<LoginPage> {
           children: [
             TextField(
               controller: usernameController,
-              decoration: const InputDecoration(labelText: 'Email or username'),
+              style: AppTheme.pixelText(fontSize: 16, color: AppTheme.textDark),
+              decoration: InputDecoration(
+                labelText: 'Email or username',
+                labelStyle: AppTheme.pixelText(
+                  fontSize: 14,
+                  color: AppTheme.textDark,
+                ),
+              ),
             ),
 
             const SizedBox(height: 20),
@@ -76,33 +93,44 @@ class _LoginPageState extends State<LoginPage> {
             TextField(
               controller: passwordController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: 'Password'),
+              style: AppTheme.pixelText(fontSize: 16, color: AppTheme.textDark),
+              decoration: InputDecoration(
+                labelText: 'Password',
+                labelStyle: AppTheme.pixelText(
+                  fontSize: 14,
+                  color: AppTheme.textDark,
+                ),
+              ),
             ),
 
             const SizedBox(height: 20),
 
-            ElevatedButton(
+            PixelButton(
+              logicalWidth: 40,
+              logicalHeight: 12,
+              width: 220,
+              pressChildOffset: const Offset(0, 1),
               onPressed: _login,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 40,
-                  vertical: 16,
-                ),
+              semanticsLabel: 'Login',
+              child: Text(
+                'Login',
+                style: AppTheme.buttonLabel(AppTheme.textDark),
               ),
-              child: const Text('Login'),
             ),
 
             const SizedBox(height: 12),
 
-            ElevatedButton(
+            PixelButton(
+              logicalWidth: 40,
+              logicalHeight: 12,
+              width: 220,
+              pressChildOffset: const Offset(0, 1),
               onPressed: _signUp,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 40,
-                  vertical: 16,
-                ),
+              semanticsLabel: 'Sign up',
+              child: Text(
+                'Sign up',
+                style: AppTheme.buttonLabel(AppTheme.textDark),
               ),
-              child: const Text('Sign up'),
             ),
           ],
         ),

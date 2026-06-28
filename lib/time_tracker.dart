@@ -24,7 +24,7 @@ class PetTimeTracker {
       _tickCount += 1;
       if (_tickCount % 12 == 0) {
         pet.ageInMinutes += 1;
-        pet.evolve();
+        pet.maybeEvolve();
       }
       onTick();
     });

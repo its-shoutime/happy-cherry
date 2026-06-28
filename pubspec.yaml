@@ -38,6 +38,7 @@ dependencies:
   firebase_core: ^4.11.0
   firebase_auth: ^6.5.4
   cloud_firestore: ^6.6.0
+  pixel_ui: ^0.5.1
 
 dev_dependencies:
   flutter_test:
@@ -61,7 +62,18 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/pets/angel/
+    - assets/pets/bear/
     - assets/pets/blob/
+    - assets/pets/cherry/
+    - assets/pets/demon/
+    - assets/pets/flower/
+    - assets/pets/lloyd/
+    - assets/pets/mousse/
+    - assets/pets/puffaloo/
+    - assets/pets/sprout/
+    - assets/pets/squeaky/
+    - assets/pets/starfruit/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
