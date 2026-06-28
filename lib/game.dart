@@ -28,19 +28,28 @@ class _CherryCatchGameState extends State<CherryCatchGame> {
   final Random random = Random();
 
   @override
-  void initState() {
-    super.initState();
-    startGame();
-  }
+void initState() {
+  super.initState();
+  _restoreAndStart();
+}
 
-  double get maxCherryX => max(gameWidth - cherrySize, 0);
-  double get maxBasketX => max(gameWidth - basketWidth, 0);
+Future<void> _restoreAndStart() async {
+  // Start the game directly on web/Chrome without Firebase login.
+  startGame();
+}
 
-  void startGame() {
-    gameTimer?.cancel();
+Future<void> _saveGameState() async {
+  // Chrome users keep local persistence in the pet state only.
+}
 
-    setState(() {
-      score = 0;
+double get maxCherryX => max(gameWidth - cherrySize, 0);
+double get maxBasketX => max(gameWidth - basketWidth, 0);
+
+void startGame() {
+  gameTimer?.cancel();
+
+  setState(() {
+    score = 0;
       lives = 1;
       gameOver = false;
       cherryY = 0;
@@ -60,16 +69,19 @@ class _CherryCatchGameState extends State<CherryCatchGame> {
         if (cherryY > 650) {
           lives--;
           resetCherry();
+          _saveGameState();
         }
 
         if (cherryY > 560 && cherryX > basketX - 30 && cherryX < basketX + 90) {
           score++;
           resetCherry();
+          _saveGameState();
         }
 
         if (lives <= 0) {
           gameOver = true;
           gameTimer?.cancel();
+          _saveGameState();
         }
       });
     });
@@ -97,6 +109,7 @@ class _CherryCatchGameState extends State<CherryCatchGame> {
   @override
   void dispose() {
     gameTimer?.cancel();
+    _saveGameState();
     super.dispose();
   }
 

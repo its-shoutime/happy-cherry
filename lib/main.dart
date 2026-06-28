@@ -1,3 +1,5 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'game.dart';
 import 'game_state.dart';
@@ -14,21 +16,12 @@ import 'user_input.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
   runApp(const MyApp());
 }
 
-class MyApp extends StatefulWidget {
+class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  bool isLoggedIn = false;
 
   @override
   Widget build(BuildContext context) {
@@ -36,21 +29,36 @@ class _MyAppState extends State<MyApp> {
       debugShowCheckedModeBanner: false,
       title: 'Happy Cherry',
       theme: ThemeData(colorSchemeSeed: Colors.pink, useMaterial3: true),
-      home: isLoggedIn
-          ? const HomePage()
-          : LoginPage(
-              onLogin: () {
-                setState(() {
-                  isLoggedIn = true;
-                });
-              },
-            ),
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+
+          final user = snapshot.data;
+          if (user == null) {
+            return const LoginPage();
+          }
+
+          return HomePage(userId: user.uid, onLogout: _handleLogout);
+        },
+      ),
     );
+  }
+
+  Future<void> _handleLogout() async {
+    await FirebaseAuth.instance.signOut();
   }
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final String userId;
+  final Future<void> Function() onLogout;
+
+  const HomePage({super.key, required this.userId, required this.onLogout});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -71,14 +79,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadGame() async {
-    final loadedPet = await GameState.loadPet();
+    final loadedPet = await GameState.loadPet(userId: widget.userId);
     setState(() {
       pet = loadedPet ?? Pet(name: "Mochi");
       timeTracker = PetTimeTracker(pet: pet, onTick: _onTick, onDeath: _onDeath);
       timeTracker.start();
       _isLoading = false;
     });
-    await GameState.savePet(pet);
+    await GameState.savePet(pet, userId: widget.userId);
   }
 
   void _onDeath() {
@@ -102,7 +110,7 @@ class _HomePageState extends State<HomePage> {
 
   void _onTick() {
     setState(() {});
-    GameState.savePet(pet);
+    GameState.savePet(pet, userId: widget.userId);
   }
 
   @override
@@ -262,10 +270,15 @@ class _HomePageState extends State<HomePage> {
             pet: pet,
             onRename: (newName) {
               setState(() => pet.name = newName);
-              GameState.savePet(pet);
+              GameState.savePet(pet, userId: widget.userId);
             },
           ),
           InfoButton(pet: pet),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: widget.onLogout,
+          ),
         ],
       ),
       backgroundColor: pet.lightsOff
@@ -308,51 +321,60 @@ class _HomePageState extends State<HomePage> {
 
               const SizedBox(height: 18),
 
-              UserActions(
-                isSleeping: pet.mood == PetMood.sleeping,
-                canHeal: pet.isSick,
-                onFeed: () {
-                  if (pet.hunger < 100) {
-                    setState(() {
-                      pet.feed();
-                      _showFood = true;
-                    });
-                    GameState.savePet(pet);
-                    Future.delayed(const Duration(seconds: 2), () {
-                      if (!mounted) return;
-                      setState(() => _showFood = false);
-                    });
-                  }
-                },
-                onPlay: () async {
-                  final score = await Navigator.of(context).push<int>(
-                    MaterialPageRoute(builder: (_) => const CherryCatchGame()),
-                  );
-                  if (score != null && score > 3) {
-                    setState(() {
-                      if (pet.happiness < 100) {
-                        _showStars = true;
-                      }
-                      pet.play();
-                    });
-                    GameState.savePet(pet);
-                    if (_showStars) {
-                      Future.delayed(const Duration(seconds: 2), () {
-                        if (!mounted) return;
-                        setState(() => _showStars = false);
-                      });
-                    }
-                  }
-                },
-                onClean: () {
-                  setState(() => pet.cleanPoop());
-                  GameState.savePet(pet);
-                },
-                onHeal: () {
-                  setState(() => pet.heal());
-                  GameState.savePet(pet);
-                },
-              ),
+UserActions(
+  isSleeping: pet.mood == PetMood.sleeping,
+  canHeal: pet.isSick,
+
+  onFeed: () {
+    if (pet.hunger < 100) {
+      setState(() {
+        pet.feed();
+        _showFood = true;
+      });
+
+      GameState.savePet(pet, userId: widget.userId);
+
+      Future.delayed(const Duration(seconds: 2), () {
+        if (!mounted) return;
+        setState(() => _showFood = false);
+      });
+    }
+  },
+
+  onPlay: () async {
+    final score = await Navigator.of(context).push<int>(
+      MaterialPageRoute(builder: (_) => const CherryCatchGame()),
+    );
+
+    if (score != null && score > 3) {
+      setState(() {
+        if (pet.happiness < 100) {
+          _showStars = true;
+        }
+        pet.play();
+      });
+
+      GameState.savePet(pet, userId: widget.userId);
+
+      if (_showStars) {
+        Future.delayed(const Duration(seconds: 2), () {
+          if (!mounted) return;
+          setState(() => _showStars = false);
+        });
+      }
+    }
+  },
+
+  onClean: () {
+    setState(() => pet.cleanPoop());
+    GameState.savePet(pet, userId: widget.userId);
+  },
+
+  onHeal: () {
+    setState(() => pet.heal());
+    GameState.savePet(pet, userId: widget.userId);
+  },
+),
 
               const SizedBox(height: 30),
             ],

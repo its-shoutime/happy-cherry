@@ -29,6 +29,10 @@ class DefaultFirebaseOptions {
       case TargetPlatform.windows:
         return windows;
       case TargetPlatform.linux:
+        throw UnsupportedError(
+          'DefaultFirebaseOptions have not been configured for linux - '
+          'you can reconfigure this by running the FlutterFire CLI again.',
+        );
         return linux;
       
       default:
@@ -55,6 +59,7 @@ class DefaultFirebaseOptions {
     projectId: 'happy-cherry',
     storageBucket: 'happy-cherry.firebasestorage.app',
   );
+
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyD61elxztcikB5MyEImVAgD3E8yoIxi6cE',
     appId: '1:531974328621:ios:75e24a86083f784fd183a4',
@@ -63,6 +68,7 @@ class DefaultFirebaseOptions {
     storageBucket: 'happy-cherry.firebasestorage.app',
     iosBundleId: 'com.example.happyCherry',
   );
+
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyD61elxztcikB5MyEImVAgD3E8yoIxi6cE',
     appId: '1:531974328621:ios:75e24a86083f784fd183a4',
