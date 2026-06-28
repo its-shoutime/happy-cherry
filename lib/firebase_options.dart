@@ -33,6 +33,8 @@ class DefaultFirebaseOptions {
           'DefaultFirebaseOptions have not been configured for linux - '
           'you can reconfigure this by running the FlutterFire CLI again.',
         );
+        return linux;
+      
       default:
         throw UnsupportedError(
           'DefaultFirebaseOptions are not supported for this platform.',
@@ -77,6 +79,15 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyBw4iUb9F3Aq2j7-9w5y4845AMrhRnwdK4',
+    appId: '1:531974328621:web:87d04cb4d61878dfd183a4',
+    messagingSenderId: '531974328621',
+    projectId: 'happy-cherry',
+    authDomain: 'happy-cherry.firebaseapp.com',
+    storageBucket: 'happy-cherry.firebasestorage.app',
+    measurementId: 'G-QYMK3G6KTK',
+  );
+  static const FirebaseOptions linux = FirebaseOptions(
     apiKey: 'AIzaSyBw4iUb9F3Aq2j7-9w5y4845AMrhRnwdK4',
     appId: '1:531974328621:web:87d04cb4d61878dfd183a4',
     messagingSenderId: '531974328621',

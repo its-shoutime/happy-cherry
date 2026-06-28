@@ -28,28 +28,28 @@ class _CherryCatchGameState extends State<CherryCatchGame> {
   final Random random = Random();
 
   @override
-  void initState() {
-    super.initState();
-    _restoreAndStart();
-  }
+void initState() {
+  super.initState();
+  _restoreAndStart();
+}
 
-  Future<void> _restoreAndStart() async {
-    // Start the game directly on web/Chrome without Firebase login.
-    startGame();
-  }
+Future<void> _restoreAndStart() async {
+  // Start the game directly on web/Chrome without Firebase login.
+  startGame();
+}
 
-  Future<void> _saveGameState() async {
-    // Chrome users keep local persistence in the pet state only.
-  }
+Future<void> _saveGameState() async {
+  // Chrome users keep local persistence in the pet state only.
+}
 
-  double get maxCherryX => max(gameWidth - cherrySize, 0);
-  double get maxBasketX => max(gameWidth - basketWidth, 0);
+double get maxCherryX => max(gameWidth - cherrySize, 0);
+double get maxBasketX => max(gameWidth - basketWidth, 0);
 
-  void startGame() {
-    gameTimer?.cancel();
+void startGame() {
+  gameTimer?.cancel();
 
-    setState(() {
-      score = 0;
+  setState(() {
+    score = 0;
       lives = 1;
       gameOver = false;
       cherryY = 0;
