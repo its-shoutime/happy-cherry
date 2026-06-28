@@ -65,23 +65,41 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late Pet pet;
   late PetTimeTracker timeTracker;
-  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    pet = Pet(name: "Mochi");
+    _startTimeTracker();
+    _loadCachedPet();
     _loadGame();
+  }
+
+  void _startTimeTracker() {
+    timeTracker = PetTimeTracker(pet: pet, onTick: _onTick);
+    timeTracker.start();
+  }
+
+  Future<void> _loadCachedPet() async {
+    final cachedPet = await GameState.loadCachedPet(userId: widget.userId);
+    if (!mounted || cachedPet == null) return;
+
+    timeTracker.stop();
+    setState(() {
+      pet = cachedPet;
+      _startTimeTracker();
+    });
   }
 
   Future<void> _loadGame() async {
     final loadedPet = await GameState.loadPet(userId: widget.userId);
+    if (!mounted || loadedPet == null) return;
+
+    timeTracker.stop();
     setState(() {
-      pet = loadedPet ?? Pet(name: "Mochi");
-      timeTracker = PetTimeTracker(pet: pet, onTick: _onTick);
-      timeTracker.start();
-      _isLoading = false;
+      pet = loadedPet;
+      _startTimeTracker();
     });
-    await GameState.savePet(pet, userId: widget.userId);
   }
 
   void _onTick() {
@@ -123,14 +141,6 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        appBar: AppBar(title: const Text("Happy Cherry"), centerTitle: true),
-        backgroundColor: const Color.fromARGB(255, 205, 150, 168),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
-
     return Scaffold(
       appBar: AppBar(
         title: Text(pet.name),
