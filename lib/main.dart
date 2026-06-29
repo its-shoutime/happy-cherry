@@ -1,12 +1,12 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'app_theme.dart';
 import 'game.dart';
 import 'game_state.dart';
 import 'info_button.dart';
 import 'login.dart';
 import 'death.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'models/pet.dart';
 import 'pet_animation.dart';
@@ -28,7 +28,8 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Happy Cherry',
-      theme: ThemeData(colorSchemeSeed: Colors.pink, useMaterial3: true),
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
@@ -103,7 +104,7 @@ class _HomePageState extends State<HomePage> {
 
     timeTracker.stop();
     setState(() {
-      pet = loadedPet ?? Pet(name: "Mochi");
+      pet = loadedPet;
       timeTracker = PetTimeTracker(pet: pet, onTick: _onTick, onDeath: _onDeath);
       timeTracker.start();
       _isLoading = false;
@@ -129,6 +130,21 @@ class _HomePageState extends State<HomePage> {
     GameState.savePet(pet);
   }
 
+  void _abandonPet() {
+    final petName = pet.name;
+    timeTracker.stop();
+    setState(() {
+      pet = Pet(name: petName);
+      _isDead = false;
+      _showFood = false;
+      _showStars = false;
+      timeTracker = PetTimeTracker(pet: pet, onTick: _onTick, onDeath: _onDeath);
+      timeTracker.start();
+    });
+    GameState.deleteSave(userId: widget.userId);
+    GameState.savePet(pet, userId: widget.userId);
+  }
+
   void _onTick() {
     setState(() {});
     GameState.savePet(pet, userId: widget.userId);
@@ -149,14 +165,23 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Color get bodyTextColor => pet.lightsOff ? Colors.black : Colors.white;
+  Color get bodyTextColor =>
+      pet.lightsOff ? AppTheme.textLight : AppTheme.textDark;
 
-  Widget buildHeartMeter(String label, double value, Color textColor) {
+  TextStyle pixelBodyText(double fontSize, {FontWeight? fontWeight}) {
+    return AppTheme.pixelText(
+      fontSize: fontSize,
+      color: bodyTextColor,
+      shadowColor: pet.lightsOff ? const Color(0x80000000) : null,
+    ).copyWith(fontWeight: fontWeight);
+  }
+
+  Widget buildHeartMeter(String label, double value) {
     final heartUnits = value / 25.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(label, style: TextStyle(fontSize: 18, color: textColor)),
+        Text(label, style: pixelBodyText(18)),
 
         const SizedBox(height: 5),
 
@@ -207,7 +232,7 @@ class _HomePageState extends State<HomePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text("Poop", style: TextStyle(fontSize: 18, color: bodyTextColor)),
+        Text("Poop", style: pixelBodyText(18)),
         const SizedBox(height: 5),
         Row(
           mainAxisSize: MainAxisSize.min,
@@ -237,10 +262,8 @@ class _HomePageState extends State<HomePage> {
         ],
         Text(
           lowHearts ? 'Attention needed' : 'All good!',
-          style: TextStyle(
+          style: pixelBodyText(16, fontWeight: FontWeight.bold).copyWith(
             color: lowHearts ? Colors.red : bodyTextColor,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
           ),
         ),
       ],
@@ -251,17 +274,17 @@ class _HomePageState extends State<HomePage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text('Lights', style: TextStyle(fontSize: 16, color: bodyTextColor)),
+        Text('Lights', style: pixelBodyText(16)),
         Switch(
-          value: pet.lightsOff,
-          onChanged: (value) {
+          value: !pet.lightsOff,
+          onChanged: (lightsOn) {
             setState(() {
-              pet.lightsOff = !value;
+              pet.lightsOff = !lightsOn;
               if (!pet.hasAttentionCondition) {
                 pet.attentionSuppressed = false;
                 pet.attentionSeconds = 0;
               }
-              GameState.savePet(pet);
+              GameState.savePet(pet, userId: widget.userId);
             });
           },
         ),
@@ -273,8 +296,11 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text("Happy Cherry"), centerTitle: true),
-        backgroundColor: const Color.fromARGB(255, 205, 150, 168),
+        appBar: AppBar(
+          title: Text('Happy Cherry', style: pixelBodyText(20)),
+          centerTitle: true,
+        ),
+        backgroundColor: AppTheme.backgroundPink,
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -282,9 +308,11 @@ class _HomePageState extends State<HomePage> {
       return DeathScreen(onRestart: _restartFromDeath);
     }
 
-    return Scaffold(
+    return Theme(
+      data: AppTheme.forLightsOff(pet.lightsOff),
+      child: Scaffold(
       appBar: AppBar(
-        title: Text(pet.name),
+        title: Text(pet.name, style: pixelBodyText(20)),
         centerTitle: true,
         actions: [
           RenameButton(
@@ -294,7 +322,11 @@ class _HomePageState extends State<HomePage> {
               GameState.savePet(pet, userId: widget.userId);
             },
           ),
-          InfoButton(pet: pet),
+          InfoButton(
+            pet: pet,
+            lightsOff: pet.lightsOff,
+            onAbandon: _abandonPet,
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Logout',
@@ -304,7 +336,7 @@ class _HomePageState extends State<HomePage> {
       ),
       backgroundColor: pet.lightsOff
           ? Colors.black
-          : const Color.fromARGB(255, 205, 150, 168),
+          : AppTheme.backgroundPink,
 
       body: Padding(
         padding: const EdgeInsets.all(24),
@@ -324,17 +356,13 @@ class _HomePageState extends State<HomePage> {
               Text(
                 pet.feels,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: bodyTextColor,
-                ),
+                style: pixelBodyText(22, fontWeight: FontWeight.bold),
               ),
 
               const SizedBox(height: 24),
 
-              buildHeartMeter("Hunger", pet.hunger, bodyTextColor),
-              buildHeartMeter("Happiness", pet.happiness, bodyTextColor),
+              buildHeartMeter("Hunger", pet.hunger),
+              buildHeartMeter("Happiness", pet.happiness),
               buildAttentionIndicator(),
               const SizedBox(height: 16),
               if (DateTime.now().hour >= 23 || DateTime.now().hour < 8)
@@ -402,6 +430,7 @@ UserActions(
           ),
         ),
       ),
+    ),
     );
   }
 }
