@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pixel_ui/pixel_ui.dart';
 
 import 'app_theme.dart';
+import 'audio_manager.dart';
 import 'game_state.dart';
 
 class LoginPage extends StatefulWidget {
@@ -14,6 +15,12 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final usernameController = TextEditingController();
   final passwordController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    AudioManager.instance.playBgm();
+  }
 
   @override
   void dispose() {
@@ -30,6 +37,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _login() async {
+    AudioManager.instance.playButton();
     final username = usernameController.text.trim();
     final password = passwordController.text;
     if (username.isEmpty || password.isEmpty) {
@@ -45,6 +53,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _signUp() async {
+    AudioManager.instance.playButton();
     final username = usernameController.text.trim();
     final password = passwordController.text;
     if (username.isEmpty || password.isEmpty) {

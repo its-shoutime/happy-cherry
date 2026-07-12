@@ -329,7 +329,7 @@ class Pet {
     poopCount: (json['poopCount'] as num?)?.toInt() ?? 0,
     secondsSinceLastPoop: (json['secondsSinceLastPoop'] as num?)?.toInt() ?? 0,
     isSick: json['isSick'] as bool? ?? false,
-    lightsOff: json['lightsOff'] as bool? ?? false,
+    lightsOff: _readBool(json['lightsOff']),
     careMistakes: (json['careMistakes'] as num?)?.toInt() ?? 0,
     attentionSeconds: (json['attentionSeconds'] as num?)?.toInt() ?? 0,
     attentionSuppressed: json['attentionSuppressed'] as bool? ?? false,
@@ -342,5 +342,15 @@ class Pet {
       return (raw * maxStat / 100.0).clamp(0.0, maxStat);
     }
     return raw.clamp(0.0, maxStat);
+  }
+
+  static bool _readBool(Object? value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      return normalized == 'true' || normalized == '1';
+    }
+    return false;
   }
 }

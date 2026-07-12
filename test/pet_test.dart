@@ -519,5 +519,21 @@ void main() {
       expect(pet.hunger, 8);
       expect(pet.happiness, 4);
     });
+
+    test('lightsOff persists through json roundtrip', () {
+      final pet = Pet(name: 'Dark', lightsOff: true);
+      final restored = Pet.fromJson(pet.toJson());
+      expect(restored.lightsOff, isTrue);
+
+      final fromRemote = Pet.fromJson({
+        'name': 'Dark',
+        'type': 'Blob',
+        'stage': 'baby',
+        'hunger': 8,
+        'happiness': 8,
+        'lightsOff': true,
+      });
+      expect(fromRemote.lightsOff, isTrue);
+    });
   });
 }

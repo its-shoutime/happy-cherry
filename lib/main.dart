@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
+import 'audio_manager.dart';
 import 'game.dart';
 import 'game_state.dart';
 import 'info_button.dart';
@@ -17,6 +18,7 @@ import 'user_input.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await AudioManager.instance.init();
   runApp(const MyApp());
 }
 
@@ -51,6 +53,7 @@ class MyApp extends StatelessWidget {
   }
 
   Future<void> _handleLogout() async {
+    await AudioManager.instance.stopBgm();
     await FirebaseAuth.instance.signOut();
   }
 }
@@ -73,6 +76,7 @@ class _HomePageState extends State<HomePage> {
   bool _isDead = false;
   bool _showFood = false;
   bool _showStars = false;
+  bool _muted = AudioManager.instance.muted;
 
   @override
   void initState() {
@@ -80,6 +84,7 @@ class _HomePageState extends State<HomePage> {
     pet = Pet(name: "Mochi");
     timeTracker = PetTimeTracker(pet: pet, onTick: _onTick, onDeath: _onDeath);
     _loadGame();
+    AudioManager.instance.playBgm();
   }
 
   Future<void> _loadGame() async {
@@ -98,11 +103,25 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  void _saveProgress() {
-    GameState.savePet(pet, coins: coins, userId: widget.userId);
+  Future<void> _saveProgress() {
+    return GameState.savePet(pet, coins: coins, userId: widget.userId);
+  }
+
+  Future<void> _logout() async {
+    await _saveProgress();
+    await AudioManager.instance.playButton();
+    await widget.onLogout();
+  }
+
+  Future<void> _toggleMute() async {
+    await AudioManager.instance.toggleMute();
+    if (!mounted) return;
+    setState(() => _muted = AudioManager.instance.muted);
   }
 
   void _onDeath() {
+    AudioManager.instance.pauseBgm();
+    AudioManager.instance.playDeath();
     setState(() {
       _isDead = true;
     });
@@ -110,6 +129,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _restartFromDeath() {
+    AudioManager.instance.playButton();
     timeTracker.stop();
     setState(() {
       pet = Pet(name: "Mochi");
@@ -118,9 +138,11 @@ class _HomePageState extends State<HomePage> {
       timeTracker.start();
     });
     _saveProgress();
+    AudioManager.instance.playBgm();
   }
 
   void _abandonPet() {
+    AudioManager.instance.playButton();
     final petName = pet.name;
     timeTracker.stop();
     setState(() {
@@ -278,8 +300,8 @@ class _HomePageState extends State<HomePage> {
                 pet.attentionSuppressed = false;
                 pet.attentionSeconds = 0;
               }
-              _saveProgress();
             });
+            _saveProgress();
           },
         ),
       ],
@@ -312,6 +334,11 @@ class _HomePageState extends State<HomePage> {
         title: Text(pet.name, style: pixelBodyText(20)),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
+            tooltip: _muted ? 'Unmute' : 'Mute',
+            onPressed: _toggleMute,
+          ),
           RenameButton(
             pet: pet,
             onRename: (newName) {
@@ -328,7 +355,7 @@ class _HomePageState extends State<HomePage> {
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Logout',
-            onPressed: widget.onLogout,
+            onPressed: _logout,
           ),
         ],
       ),
@@ -373,6 +400,7 @@ UserActions(
 
   onFeed: () {
     if (pet.hunger < Pet.maxStat) {
+      AudioManager.instance.playFeed();
       setState(() {
         pet.feed();
         _showFood = true;
@@ -388,14 +416,21 @@ UserActions(
   },
 
   onPlay: () async {
+    AudioManager.instance.playButton();
     final score = await Navigator.of(context).push<int>(
       MaterialPageRoute(builder: (_) => const CherryCatchGame()),
     );
+
+    if (!mounted) return;
+    AudioManager.instance.playBgm();
 
     if (score == null) return;
 
     setState(() {
       coins += score;
+      if (score > 0) {
+        AudioManager.instance.playCoin();
+      }
       if (score > 3) {
         if (pet.happiness < Pet.maxStat) {
           _showStars = true;
@@ -415,11 +450,13 @@ UserActions(
   },
 
   onClean: () {
+    AudioManager.instance.playClean();
     setState(() => pet.cleanPoop());
     _saveProgress();
   },
 
   onHeal: () {
+    AudioManager.instance.playHeal();
     setState(() => pet.heal());
     _saveProgress();
   },

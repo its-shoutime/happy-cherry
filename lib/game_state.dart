@@ -11,6 +11,9 @@ import 'models/pet.dart';
 class GameState {
   static const String _defaultPetKey = 'pet_save';
 
+  /// Serializes saves so an older in-flight write cannot overwrite a newer one.
+  static Future<void> _saveChain = Future<void>.value();
+
   static String _petKey([String? userId]) {
     if (userId == null || userId.isEmpty) {
       return _defaultPetKey;
@@ -126,7 +129,8 @@ class GameState {
   ) {
     if (local == null) return remote;
     if (remote == null) return local;
-    return local.savedAt.isAfter(remote.savedAt) ? local : remote;
+    // Prefer local on a tie so same-device lights/settings win.
+    return remote.savedAt.isAfter(local.savedAt) ? remote : local;
   }
 
   static void _advancePetToNow(Pet pet, DateTime savedAt) {
@@ -155,8 +159,22 @@ class GameState {
     DateTime savedAt,
   ) async {
     final prefs = await SharedPreferences.getInstance();
+    final key = _petKey(userId);
+
+    // Skip if a newer save is already on disk (guards concurrent writers).
+    final existingRaw = prefs.getString(key);
+    if (existingRaw != null) {
+      try {
+        final existing = jsonDecode(existingRaw) as Map<String, dynamic>;
+        final existingAt = _parseSavedAt(existing['savedAt'] as String?);
+        if (existingAt != null && existingAt.isAfter(savedAt)) {
+          return;
+        }
+      } catch (_) {}
+    }
+
     await prefs.setString(
-      _petKey(userId),
+      key,
       jsonEncode(_savePayload(pet, coins, savedAt)),
     );
   }
@@ -232,24 +250,36 @@ class GameState {
     Pet pet, {
     required int coins,
     String? userId,
-  }) async {
+  }) {
+    // Snapshot state now; run after prior saves so order is preserved.
+    final petSnapshot = Pet.fromJson(pet.toJson());
+    final coinsSnapshot = coins;
     final savedAt = DateTime.now();
-    final saveData = _savePayload(pet, coins, savedAt);
 
-    await _cacheSave(userId, pet, coins, savedAt);
+    final save = _saveChain.then((_) async {
+      final saveData = _savePayload(petSnapshot, coinsSnapshot, savedAt);
 
-    if (userId == null || userId.isEmpty) {
-      return;
-    }
+      await _cacheSave(userId, petSnapshot, coinsSnapshot, savedAt);
 
-    try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .set(saveData);
-    } catch (error, stackTrace) {
-      debugPrint('Failed to save remote progress: $error\n$stackTrace');
-    }
+      if (userId == null || userId.isEmpty) {
+        return;
+      }
+
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .set(saveData);
+      } catch (error, stackTrace) {
+        debugPrint('Failed to save remote progress: $error\n$stackTrace');
+      }
+    });
+
+    _saveChain = save.catchError((Object error, StackTrace stackTrace) {
+      debugPrint('Save queue error: $error\n$stackTrace');
+    });
+
+    return save;
   }
 
   static Future<bool> loginUser(String username, String password) async {
