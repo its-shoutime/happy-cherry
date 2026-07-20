@@ -1,24 +1,24 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+
 import 'app_theme.dart';
 import 'audio_manager.dart';
+import 'death.dart';
+import 'firebase_options.dart';
 import 'game.dart';
 import 'game_state.dart';
 import 'info_button.dart';
+import 'loading_screen.dart';
 import 'login.dart';
-import 'death.dart';
-import 'firebase_options.dart';
 import 'models/pet.dart';
 import 'pet_animation.dart';
 import 'rename_button.dart';
 import 'time_tracker.dart';
 import 'user_input.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await AudioManager.instance.init();
   runApp(const MyApp());
 }
 
@@ -32,23 +32,69 @@ class MyApp extends StatelessWidget {
       title: 'Happy Cherry',
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
-      home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
-          }
+      home: const AppInitializer(),
+    );
+  }
+}
 
-          final user = snapshot.data;
-          if (user == null) {
-            return const LoginPage();
-          }
+class AppInitializer extends StatefulWidget {
+  const AppInitializer({super.key});
 
-          return HomePage(userId: user.uid, onLogout: _handleLogout);
-        },
-      ),
+  @override
+  State<AppInitializer> createState() => _AppInitializerState();
+}
+
+class _AppInitializerState extends State<AppInitializer> {
+  late final Future<void> _startupFuture = _initialize();
+
+  Future<void> _initialize() async {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    await AudioManager.instance.init();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _startupFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const LoadingScreen();
+        }
+
+        if (snapshot.hasError) {
+          return Scaffold(
+            backgroundColor: AppTheme.backgroundPink,
+            body: Center(
+              child: Text(
+                'Failed to start Happy Cherry.',
+                style: AppTheme.pixelText(
+                  fontSize: 18,
+                  color: AppTheme.textDark,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
+
+        return StreamBuilder<User?>(
+          stream: FirebaseAuth.instance.authStateChanges(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const LoadingScreen();
+            }
+
+            final user = snapshot.data;
+            if (user == null) {
+              return const LoginPage();
+            }
+
+            return HomePage(userId: user.uid, onLogout: _handleLogout);
+          },
+        );
+      },
     );
   }
 
@@ -97,7 +143,11 @@ class _HomePageState extends State<HomePage> {
         pet = loaded.pet;
         coins = loaded.coins;
       }
-      timeTracker = PetTimeTracker(pet: pet, onTick: _onTick, onDeath: _onDeath);
+      timeTracker = PetTimeTracker(
+        pet: pet,
+        onTick: _onTick,
+        onDeath: _onDeath,
+      );
       timeTracker.start();
       _isLoading = false;
     });
@@ -134,7 +184,11 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       pet = Pet(name: "Mochi");
       _isDead = false;
-      timeTracker = PetTimeTracker(pet: pet, onTick: _onTick, onDeath: _onDeath);
+      timeTracker = PetTimeTracker(
+        pet: pet,
+        onTick: _onTick,
+        onDeath: _onDeath,
+      );
       timeTracker.start();
     });
     _saveProgress();
@@ -150,7 +204,11 @@ class _HomePageState extends State<HomePage> {
       _isDead = false;
       _showFood = false;
       _showStars = false;
-      timeTracker = PetTimeTracker(pet: pet, onTick: _onTick, onDeath: _onDeath);
+      timeTracker = PetTimeTracker(
+        pet: pet,
+        onTick: _onTick,
+        onDeath: _onDeath,
+      );
       timeTracker.start();
     });
     // Keep account coins when replacing the pet.
@@ -278,9 +336,10 @@ class _HomePageState extends State<HomePage> {
         ],
         Text(
           lowHearts ? 'Attention needed' : 'All good!',
-          style: pixelBodyText(16, fontWeight: FontWeight.bold).copyWith(
-            color: lowHearts ? Colors.red : bodyTextColor,
-          ),
+          style: pixelBodyText(
+            16,
+            fontWeight: FontWeight.bold,
+          ).copyWith(color: lowHearts ? Colors.red : bodyTextColor),
         ),
       ],
     );
@@ -311,17 +370,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Theme(
-        data: AppTheme.light(),
-        child: Scaffold(
-          appBar: AppBar(
-            title: Text('Happy Cherry', style: pixelBodyText(20)),
-            centerTitle: true,
-          ),
-          backgroundColor: AppTheme.backgroundPink,
-          body: const Center(child: CircularProgressIndicator()),
-        ),
-      );
+      return const LoadingScreen();
     }
     if (_isDead) {
       return DeathScreen(onRestart: _restartFromDeath);
@@ -330,144 +379,144 @@ class _HomePageState extends State<HomePage> {
     return Theme(
       data: AppTheme.forLightsOff(pet.lightsOff),
       child: Scaffold(
-      appBar: AppBar(
-        title: Text(pet.name, style: pixelBodyText(20)),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
-            tooltip: _muted ? 'Unmute' : 'Mute',
-            onPressed: _toggleMute,
-          ),
-          RenameButton(
-            pet: pet,
-            onRename: (newName) {
-              setState(() => pet.name = newName);
-              _saveProgress();
-            },
-          ),
-          InfoButton(
-            pet: pet,
-            coins: coins,
-            lightsOff: pet.lightsOff,
-            onAbandon: _abandonPet,
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-            onPressed: _logout,
-          ),
-        ],
-      ),
-      backgroundColor: pet.lightsOff
-          ? Colors.black
-          : AppTheme.backgroundPink,
+        appBar: AppBar(
+          title: Text(pet.name, style: pixelBodyText(20)),
+          centerTitle: true,
+          actions: [
+            IconButton(
+              icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
+              tooltip: _muted ? 'Unmute' : 'Mute',
+              onPressed: _toggleMute,
+            ),
+            RenameButton(
+              pet: pet,
+              onRename: (newName) {
+                setState(() => pet.name = newName);
+                _saveProgress();
+              },
+            ),
+            InfoButton(
+              pet: pet,
+              coins: coins,
+              lightsOff: pet.lightsOff,
+              onAbandon: _abandonPet,
+            ),
+            IconButton(
+              icon: const Icon(Icons.logout),
+              tooltip: 'Logout',
+              onPressed: _logout,
+            ),
+          ],
+        ),
+        backgroundColor: pet.lightsOff ? Colors.black : AppTheme.backgroundPink,
 
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // top spacing
-              const SizedBox(height: 20),
+        body: Padding(
+          padding: const EdgeInsets.all(24),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // top spacing
+                const SizedBox(height: 20),
 
-              // pet graphic
-              Center(child: buildPetGraphic()),
+                // pet graphic
+                Center(child: buildPetGraphic()),
 
-              const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-              // pet mood
-              Text(
-                pet.feels,
-                textAlign: TextAlign.center,
-                style: pixelBodyText(22, fontWeight: FontWeight.bold),
-              ),
+                // pet mood
+                Text(
+                  pet.feels,
+                  textAlign: TextAlign.center,
+                  style: pixelBodyText(22, fontWeight: FontWeight.bold),
+                ),
 
-              const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-              buildHeartMeter("Hunger", pet.hunger),
-              buildHeartMeter("Happiness", pet.happiness),
-              buildAttentionIndicator(),
-              const SizedBox(height: 16),
-              buildLightsControl(),
+                buildHeartMeter("Hunger", pet.hunger),
+                buildHeartMeter("Happiness", pet.happiness),
+                buildAttentionIndicator(),
+                const SizedBox(height: 16),
+                buildLightsControl(),
 
-              const SizedBox(height: 18),
+                const SizedBox(height: 18),
 
-UserActions(
-  isSleeping: pet.mood == PetMood.sleeping,
-  canHeal: pet.isSick,
+                UserActions(
+                  isSleeping: pet.mood == PetMood.sleeping,
+                  canHeal: pet.isSick,
 
-  onFeed: () {
-    if (pet.hunger < Pet.maxStat) {
-      AudioManager.instance.playFeed();
-      setState(() {
-        pet.feed();
-        _showFood = true;
-      });
+                  onFeed: () {
+                    if (pet.hunger < Pet.maxStat) {
+                      AudioManager.instance.playFeed();
+                      setState(() {
+                        pet.feed();
+                        _showFood = true;
+                      });
 
-      _saveProgress();
+                      _saveProgress();
 
-      Future.delayed(const Duration(seconds: 2), () {
-        if (!mounted) return;
-        setState(() => _showFood = false);
-      });
-    }
-  },
+                      Future.delayed(const Duration(seconds: 2), () {
+                        if (!mounted) return;
+                        setState(() => _showFood = false);
+                      });
+                    }
+                  },
 
-  onPlay: () async {
-    AudioManager.instance.playButton();
-    final score = await Navigator.of(context).push<int>(
-      MaterialPageRoute(builder: (_) => const CherryCatchGame()),
-    );
+                  onPlay: () async {
+                    AudioManager.instance.playButton();
+                    final score = await Navigator.of(context).push<int>(
+                      MaterialPageRoute(
+                        builder: (_) => const CherryCatchGame(),
+                      ),
+                    );
 
-    if (!mounted) return;
-    AudioManager.instance.playBgm();
+                    if (!mounted) return;
+                    AudioManager.instance.playBgm();
 
-    if (score == null) return;
+                    if (score == null) return;
 
-    setState(() {
-      coins += score;
-      if (score > 0) {
-        AudioManager.instance.playCoin();
-      }
-      if (score > 3) {
-        if (pet.happiness < Pet.maxStat) {
-          _showStars = true;
-        }
-        pet.play();
-      }
-    });
+                    setState(() {
+                      coins += score;
+                      if (score > 0) {
+                        AudioManager.instance.playCoin();
+                      }
+                      if (score > 3) {
+                        if (pet.happiness < Pet.maxStat) {
+                          _showStars = true;
+                        }
+                        pet.play();
+                      }
+                    });
 
-    _saveProgress();
+                    _saveProgress();
 
-    if (_showStars) {
-      Future.delayed(const Duration(seconds: 2), () {
-        if (!mounted) return;
-        setState(() => _showStars = false);
-      });
-    }
-  },
+                    if (_showStars) {
+                      Future.delayed(const Duration(seconds: 2), () {
+                        if (!mounted) return;
+                        setState(() => _showStars = false);
+                      });
+                    }
+                  },
 
-  onClean: () {
-    AudioManager.instance.playClean();
-    setState(() => pet.cleanPoop());
-    _saveProgress();
-  },
+                  onClean: () {
+                    AudioManager.instance.playClean();
+                    setState(() => pet.cleanPoop());
+                    _saveProgress();
+                  },
 
-  onHeal: () {
-    AudioManager.instance.playHeal();
-    setState(() => pet.heal());
-    _saveProgress();
-  },
-),
+                  onHeal: () {
+                    AudioManager.instance.playHeal();
+                    setState(() => pet.heal());
+                    _saveProgress();
+                  },
+                ),
 
-              const SizedBox(height: 30),
-            ],
+                const SizedBox(height: 30),
+              ],
+            ),
           ),
         ),
       ),
-    ),
     );
   }
 }
