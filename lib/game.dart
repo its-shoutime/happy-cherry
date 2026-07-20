@@ -3,6 +3,8 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import 'audio_manager.dart';
+
 class CherryCatchGame extends StatefulWidget {
   const CherryCatchGame({super.key});
 
@@ -28,28 +30,28 @@ class _CherryCatchGameState extends State<CherryCatchGame> {
   final Random random = Random();
 
   @override
-void initState() {
-  super.initState();
-  _restoreAndStart();
-}
+  void initState() {
+    super.initState();
+    _restoreAndStart();
+  }
 
-Future<void> _restoreAndStart() async {
-  // Start the game directly on web/Chrome without Firebase login.
-  startGame();
-}
+  Future<void> _restoreAndStart() async {
+    // Keep home BGM going softly under the minigame.
+    startGame();
+  }
 
-Future<void> _saveGameState() async {
-  // Chrome users keep local persistence in the pet state only.
-}
+  Future<void> _saveGameState() async {
+    // Chrome users keep local persistence in the pet state only.
+  }
 
-double get maxCherryX => max(gameWidth - cherrySize, 0);
-double get maxBasketX => max(gameWidth - basketWidth, 0);
+  double get maxCherryX => max(gameWidth - cherrySize, 0);
+  double get maxBasketX => max(gameWidth - basketWidth, 0);
 
-void startGame() {
-  gameTimer?.cancel();
+  void startGame() {
+    gameTimer?.cancel();
 
-  setState(() {
-    score = 0;
+    setState(() {
+      score = 0;
       lives = 1;
       gameOver = false;
       cherryY = 0;
@@ -70,17 +72,22 @@ void startGame() {
           lives--;
           resetCherry();
           _saveGameState();
+          if (lives <= 0) {
+            gameOver = true;
+            gameTimer?.cancel();
+            AudioManager.instance.playGameOver();
+          } else {
+            AudioManager.instance.playMiss();
+          }
         }
 
-        if (cherryY > 560 && cherryX > basketX - 30 && cherryX < basketX + 90) {
+        if (!gameOver &&
+            cherryY > 560 &&
+            cherryX > basketX - 30 &&
+            cherryX < basketX + 90) {
           score++;
+          AudioManager.instance.playCatch();
           resetCherry();
-          _saveGameState();
-        }
-
-        if (lives <= 0) {
-          gameOver = true;
-          gameTimer?.cancel();
           _saveGameState();
         }
       });
@@ -178,6 +185,7 @@ void startGame() {
                         const SizedBox(height: 20),
                         ElevatedButton(
                           onPressed: () {
+                            AudioManager.instance.playButton();
                             if (Navigator.canPop(context)) {
                               Navigator.pop(context, score);
                             }

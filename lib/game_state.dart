@@ -1,13 +1,18 @@
+import 'dart:async' show unawaited;
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models/pet.dart';
 
 class GameState {
   static const String _defaultPetKey = 'pet_save';
+
+  /// Serializes saves so an older in-flight write cannot overwrite a newer one.
+  static Future<void> _saveChain = Future<void>.value();
 
   static String _petKey([String? userId]) {
     if (userId == null || userId.isEmpty) {
@@ -36,103 +41,245 @@ class GameState {
     return prefs.getString(_lastLoggedInUserKey);
   }
 
-  static Future<Pet?> loadCachedPet({String? userId}) async {
+  static DateTime? _parseSavedAt(String? raw) {
+    if (raw == null) return null;
+    return DateTime.tryParse(raw);
+  }
+
+  static Map<String, dynamic>? _readPetJson(Map<String, dynamic> decoded) {
+    final pet = decoded['pet'];
+    if (pet is Map<String, dynamic>) {
+      return pet;
+    }
+    if (pet is Map) {
+      return Map<String, dynamic>.from(pet);
+    }
+    if (decoded.containsKey('name')) {
+      return decoded;
+    }
+    return null;
+  }
+
+  static int _readCoins(Map<String, dynamic> decoded, Map<String, dynamic> petJson) {
+    final accountCoins = (decoded['coins'] as num?)?.toInt();
+    if (accountCoins != null) {
+      return accountCoins;
+    }
+    // Migrate legacy pet XP into account coins once.
+    return (petJson['xp'] as num?)?.toInt() ?? 0;
+  }
+
+  static ({Pet pet, int coins, DateTime savedAt})? _decodeStoredSave(
+    Map<String, dynamic> decoded,
+  ) {
+    try {
+      final petJson = _readPetJson(decoded);
+      if (petJson == null) return null;
+
+      final pet = Pet.fromJson(petJson);
+      final coins = _readCoins(decoded, petJson);
+      final savedAt =
+          _parseSavedAt(decoded['savedAt'] as String?) ?? DateTime.now();
+      return (pet: pet, coins: coins, savedAt: savedAt);
+    } catch (error, stackTrace) {
+      debugPrint('Failed to decode pet save: $error\n$stackTrace');
+      return null;
+    }
+  }
+
+  static Future<({Pet pet, int coins, DateTime savedAt})?> _loadLocalSave(
+    String? userId,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     final petJson = prefs.getString(_petKey(userId));
     if (petJson == null) return null;
 
     try {
       final decoded = jsonDecode(petJson) as Map<String, dynamic>;
-      final savedAt = decoded['savedAt'] as String?;
-      final savedPet = decoded['pet'] as Map<String, dynamic>?;
-      final pet = savedPet != null
-          ? Pet.fromJson(savedPet)
-          : Pet.fromJson(decoded);
-
-      if (savedAt != null) {
-        final lastSaved = DateTime.tryParse(savedAt) ?? DateTime.now();
-        final elapsed = DateTime.now().difference(lastSaved);
-        if (elapsed > Duration.zero) {
-          pet.advanceTime(elapsed);
-        }
-      }
-
-      return pet;
-    } catch (_) {
+      return _decodeStoredSave(decoded);
+    } catch (error, stackTrace) {
+      debugPrint('Failed to load local save: $error\n$stackTrace');
       return null;
     }
   }
 
-  static Future<Pet?> loadPet({String? userId}) async {
-    if (userId == null || userId.isEmpty) {
-      return await loadCachedPet(userId: userId);
-    }
-
-    final cachedPet = await loadCachedPet(userId: userId);
-
+  static Future<({Pet pet, int coins, DateTime savedAt})?> _loadRemoteSave(
+    String userId,
+  ) async {
     try {
       final document = await FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
           .get();
-      if (!document.exists) {
-        return cachedPet;
-      }
+      if (!document.exists) return null;
 
       final data = document.data();
-      if (data == null) {
-        return cachedPet;
-      }
+      if (data == null) return null;
 
-      final savedAt = data['savedAt'] as String?;
-      final savedPet = data['pet'] as Map<String, dynamic>?;
-      final pet = savedPet != null ? Pet.fromJson(savedPet) : null;
-      if (pet == null) {
-        return cachedPet;
-      }
-
-      if (savedAt != null) {
-        final lastSaved = DateTime.tryParse(savedAt) ?? DateTime.now();
-        final elapsed = DateTime.now().difference(lastSaved);
-        if (elapsed > Duration.zero) {
-          pet.advanceTime(elapsed);
-        }
-      }
-
-      final saveData = {
-        'pet': pet.toJson(),
-        'savedAt': savedAt ?? DateTime.now().toIso8601String(),
-      };
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_petKey(userId), jsonEncode(saveData));
-
-      return pet;
-    } catch (_) {
-      return cachedPet;
+      return _decodeStoredSave(Map<String, dynamic>.from(data));
+    } catch (error, stackTrace) {
+      debugPrint('Failed to load remote save: $error\n$stackTrace');
+      return null;
     }
   }
 
-  static Future<void> savePet(Pet pet, {String? userId}) async {
-    final saveData = {
+  static ({Pet pet, int coins, DateTime savedAt})? _pickNewestSave(
+    ({Pet pet, int coins, DateTime savedAt})? local,
+    ({Pet pet, int coins, DateTime savedAt})? remote,
+  ) {
+    if (local == null) return remote;
+    if (remote == null) return local;
+    // Prefer local on a tie so same-device lights/settings win.
+    return remote.savedAt.isAfter(local.savedAt) ? remote : local;
+  }
+
+  static void _advancePetToNow(Pet pet, DateTime savedAt) {
+    final elapsed = DateTime.now().difference(savedAt);
+    if (elapsed > Duration.zero) {
+      pet.advanceTime(elapsed);
+    }
+  }
+
+  static Map<String, dynamic> _savePayload(
+    Pet pet,
+    int coins,
+    DateTime savedAt,
+  ) {
+    return {
       'pet': pet.toJson(),
-      'savedAt': DateTime.now().toIso8601String(),
+      'coins': coins,
+      'savedAt': savedAt.toIso8601String(),
     };
+  }
 
+  static Future<void> _cacheSave(
+    String? userId,
+    Pet pet,
+    int coins,
+    DateTime savedAt,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_petKey(userId), jsonEncode(saveData));
+    final key = _petKey(userId);
 
+    // Skip if a newer save is already on disk (guards concurrent writers).
+    final existingRaw = prefs.getString(key);
+    if (existingRaw != null) {
+      try {
+        final existing = jsonDecode(existingRaw) as Map<String, dynamic>;
+        final existingAt = _parseSavedAt(existing['savedAt'] as String?);
+        if (existingAt != null && existingAt.isAfter(savedAt)) {
+          return;
+        }
+      } catch (_) {}
+    }
+
+    await prefs.setString(
+      key,
+      jsonEncode(_savePayload(pet, coins, savedAt)),
+    );
+  }
+
+  static Future<({Pet pet, int coins})?> loadCachedPet({String? userId}) async {
+    final stored = await _loadLocalSave(userId);
+    if (stored == null) return null;
+
+    _advancePetToNow(stored.pet, stored.savedAt);
+    return (pet: stored.pet, coins: stored.coins);
+  }
+
+  static Pet _copyPet(Pet pet) => Pet.fromJson(pet.toJson());
+
+  static Future<({Pet pet, int coins})?> loadPet({
+    String? userId,
+    void Function(Pet pet, int coins)? onLocalReady,
+  }) async {
     if (userId == null || userId.isEmpty) {
-      return;
+      return loadCachedPet(userId: userId);
     }
 
-    try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .set(saveData, SetOptions(merge: true));
-    } catch (_) {
-      // Ignore Firestore write failures here; local cache preserves play state.
+    final localFuture = _loadLocalSave(userId);
+    final remoteFuture = _loadRemoteSave(userId);
+
+    final local = await localFuture;
+    Pet? previewPet;
+    int? previewCoins;
+    if (local != null && onLocalReady != null) {
+      previewPet = _copyPet(local.pet);
+      previewCoins = local.coins;
+      _advancePetToNow(previewPet, local.savedAt);
+      onLocalReady(previewPet, previewCoins);
     }
+
+    final remote = await remoteFuture;
+    final stored = _pickNewestSave(local, remote);
+    if (stored == null) {
+      if (previewPet == null || previewCoins == null) return null;
+      return (pet: previewPet, coins: previewCoins);
+    }
+
+    final Pet resultPet;
+    final int resultCoins;
+    if (previewPet != null && identical(stored, local)) {
+      resultPet = previewPet;
+      resultCoins = previewCoins!;
+    } else {
+      resultPet = stored.pet;
+      resultCoins = stored.coins;
+      _advancePetToNow(resultPet, stored.savedAt);
+    }
+
+    final syncedAt = DateTime.now();
+    unawaited(_cacheSave(userId, resultPet, resultCoins, syncedAt));
+
+    if (remote == null || identical(stored, local)) {
+      unawaited(
+        FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .set(_savePayload(resultPet, resultCoins, syncedAt))
+            .catchError((Object error, StackTrace stackTrace) {
+              debugPrint('Failed to sync remote save: $error\n$stackTrace');
+            }),
+      );
+    }
+
+    return (pet: resultPet, coins: resultCoins);
+  }
+
+  static Future<void> savePet(
+    Pet pet, {
+    required int coins,
+    String? userId,
+  }) {
+    // Snapshot state now; run after prior saves so order is preserved.
+    final petSnapshot = Pet.fromJson(pet.toJson());
+    final coinsSnapshot = coins;
+    final savedAt = DateTime.now();
+
+    final save = _saveChain.then((_) async {
+      final saveData = _savePayload(petSnapshot, coinsSnapshot, savedAt);
+
+      await _cacheSave(userId, petSnapshot, coinsSnapshot, savedAt);
+
+      if (userId == null || userId.isEmpty) {
+        return;
+      }
+
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .set(saveData);
+      } catch (error, stackTrace) {
+        debugPrint('Failed to save remote progress: $error\n$stackTrace');
+      }
+    });
+
+    _saveChain = save.catchError((Object error, StackTrace stackTrace) {
+      debugPrint('Save queue error: $error\n$stackTrace');
+    });
+
+    return save;
   }
 
   static Future<bool> loginUser(String username, String password) async {
@@ -170,6 +317,19 @@ class GameState {
   static Future<void> deleteSave({String? userId}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_petKey(userId));
+
+    if (userId == null || userId.isEmpty) {
+      return;
+    }
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .delete();
+    } catch (error, stackTrace) {
+      debugPrint('Failed to delete remote save: $error\n$stackTrace');
+    }
   }
 
   static Future<void> clearLastLoggedInUser() async {
