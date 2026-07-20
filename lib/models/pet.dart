@@ -7,13 +7,14 @@ extension PetTypeDisplay on PetType {
 }
 
 class Pet {
+  static const double maxStat = 8.0;
+
   String name;
   PetType type;
   PetStage stage;
-  double hunger; // 0 = starving, 100 = full
-  double happiness; // 0 = sad, 100 = happy
+  double hunger; // 0 = starving, 8 = full (1 unit = half a heart)
+  double happiness; // 0 = sad, 8 = happy (1 unit = half a heart)
   int ageInMinutes;
-  int xp;
   int poopCount;
   int secondsSinceLastPoop;
   bool isSick;
@@ -26,10 +27,9 @@ class Pet {
     required this.name,
     this.type = blob,
     this.stage = PetStage.baby,
-    this.hunger = 100.0,
-    this.happiness = 100.0,
+    this.hunger = maxStat,
+    this.happiness = maxStat,
     this.ageInMinutes = 0,
-    this.xp = 0,
     this.poopCount = 0,
     this.secondsSinceLastPoop = 0,
     this.isSick = false,
@@ -39,24 +39,35 @@ class Pet {
     this.attentionSuppressed = false,
   });
 
-  PetMood get mood {
+  PetMood get mood => moodAt(DateTime.now());
+
+  PetMood moodAt(DateTime now) {
     if (isSick) {
       return PetMood.sick;
     }
 
-    if (isAsleep) {
+    if (isAsleepAt(now)) {
       return PetMood.sleeping;
     }
 
-    if (hunger <= 20 || happiness <= 20) {
+    // Sad at 2 half-hearts or fewer.
+    if (hunger <= 2 || happiness <= 2) {
       return PetMood.sad;
     }
 
-    if (hunger >= 70 && happiness >= 70) {
+    // Happy when meters look full. Heart UI uses ceil, so a half-heart stays
+    // filled until that whole unit is lost (e.g. 7.1 still shows as full).
+    if (_isVisuallyFull(hunger) && _isVisuallyFull(happiness)) {
       return PetMood.happy;
     }
 
     return PetMood.okay;
+  }
+
+  /// Matches [buildHeartMeter]: a segment stays filled until fully depleted.
+  static bool _isVisuallyFull(double value) {
+    if (value <= 0) return false;
+    return value.ceil() >= maxStat;
   }
 
   String get feels {
@@ -74,8 +85,9 @@ class Pet {
     }
   }
 
-  bool get isAsleep {
-    final now = DateTime.now();
+  bool get isAsleep => isAsleepAt(DateTime.now());
+
+  bool isAsleepAt(DateTime now) {
     final currentTime = Duration(hours: now.hour, minutes: now.minute);
     if (type.bedTime <= type.wakeTime) {
       return currentTime >= type.bedTime && currentTime < type.wakeTime;
@@ -84,21 +96,26 @@ class Pet {
     }
   }
 
-  bool get hasAttentionCondition {
+  bool get hasAttentionCondition => hasAttentionConditionAt(DateTime.now());
+
+  bool hasAttentionConditionAt(DateTime now) {
     return hunger <= 0 ||
         happiness <= 0 ||
-        poopCount >= 3 ||
-        (isAsleep && !lightsOff);
+        poopCount > 0 ||
+        (isAsleepAt(now) && !lightsOff);
   }
 
-  bool get attentionVisible {
-    return hasAttentionCondition && !attentionSuppressed;
+  bool get attentionVisible => attentionVisibleAt(DateTime.now());
+
+  bool attentionVisibleAt(DateTime now) {
+    return hasAttentionConditionAt(now) && !attentionSuppressed;
   }
 
-  void updateAttention(Duration elapsed) {
+  void updateAttention(Duration elapsed, {DateTime? now}) {
     if (elapsed.isNegative) return;
 
-    if (hasAttentionCondition) {
+    final clock = now ?? DateTime.now();
+    if (hasAttentionConditionAt(clock)) {
       if (attentionSuppressed) {
         return;
       }
@@ -147,26 +164,26 @@ class Pet {
   double get hungerDecayRatePerMinute {
     switch (stage) {
       case PetStage.baby:
-        return 0.5 / 10; // 0.05 per minute
+        return 0.04 / 10; // 0.004 per minute (scaled from 0–100)
       case PetStage.child:
-        return 0.5 / 20; // 0.025 per minute
+        return 0.04 / 20;
       case PetStage.teen:
-        return 0.5 / 30; // 0.0167 per minute
+        return 0.04 / 30;
       case PetStage.adult:
-        return 0.5 / 60; // 0.0083 per minute
+        return 0.04 / 60;
     }
   }
 
   double get happinessDecayRatePerMinute {
     switch (stage) {
       case PetStage.baby:
-        return 0.5 / 10; // 0.05 per minute
+        return 0.04 / 10;
       case PetStage.child:
-        return 0.5 / 20; // 0.025 per minute
+        return 0.04 / 20;
       case PetStage.teen:
-        return 0.5 / 30; // 0.0167 per minute
+        return 0.04 / 30;
       case PetStage.adult:
-        return 0.5 / 60; // 0.0083 per minute
+        return 0.04 / 60;
     }
   }
 
@@ -190,23 +207,22 @@ class Pet {
 
   void decayStats([Duration elapsed = const Duration(seconds: 5)]) {
     final minutes = elapsed.inSeconds / 60.0;
-    hunger = (hunger - hungerDecayRatePerMinute * minutes).clamp(0.0, 100.0);
+    hunger = (hunger - hungerDecayRatePerMinute * minutes).clamp(0.0, maxStat);
     happiness = (happiness - happinessDecayRatePerMinute * minutes).clamp(
       0.0,
-      100.0,
+      maxStat,
     );
     advancePoopTimer(elapsed);
     updateAttention(elapsed);
   }
 
   void feed() {
-    hunger = (hunger + 20).clamp(0.0, 100.0);
+    hunger = (hunger + 2).clamp(0.0, maxStat);
   }
 
   void play() {
-    happiness = (happiness + 20).clamp(0.0, 100.0);
-    hunger = (hunger - 5).clamp(0.0, 100.0);
-    xp += 5;
+    happiness = (happiness + 2).clamp(0.0, maxStat);
+    hunger = (hunger - 1).clamp(0.0, maxStat);
   }
 
   void cleanPoop() {
@@ -294,7 +310,6 @@ class Pet {
     'hunger': hunger,
     'happiness': happiness,
     'ageInMinutes': ageInMinutes,
-    'xp': xp,
     'poopCount': poopCount,
     'secondsSinceLastPoop': secondsSinceLastPoop,
     'isSick': isSick,
@@ -308,16 +323,34 @@ class Pet {
     name: json['name'] as String,
     type: petTypeFromName(json['type'] as String?),
     stage: PetStage.values.byName(json['stage'] as String),
-    hunger: (json['hunger'] as num).toDouble(),
-    happiness: (json['happiness'] as num).toDouble(),
-    ageInMinutes: json['ageInMinutes'] as int,
-    xp: json['xp'] as int,
-    poopCount: json['poopCount'] as int? ?? 0,
-    secondsSinceLastPoop: json['secondsSinceLastPoop'] as int? ?? 0,
+    hunger: _normalizeStat(json['hunger']),
+    happiness: _normalizeStat(json['happiness']),
+    ageInMinutes: (json['ageInMinutes'] as num?)?.toInt() ?? 0,
+    poopCount: (json['poopCount'] as num?)?.toInt() ?? 0,
+    secondsSinceLastPoop: (json['secondsSinceLastPoop'] as num?)?.toInt() ?? 0,
     isSick: json['isSick'] as bool? ?? false,
-    lightsOff: json['lightsOff'] as bool? ?? false,
-    careMistakes: json['careMistakes'] as int? ?? 0,
-    attentionSeconds: json['attentionSeconds'] as int? ?? 0,
+    lightsOff: _readBool(json['lightsOff']),
+    careMistakes: (json['careMistakes'] as num?)?.toInt() ?? 0,
+    attentionSeconds: (json['attentionSeconds'] as num?)?.toInt() ?? 0,
     attentionSuppressed: json['attentionSuppressed'] as bool? ?? false,
   );
+
+  /// Migrates legacy 0–100 saves onto the 0–8 half-heart scale.
+  static double _normalizeStat(Object? value) {
+    final raw = (value as num?)?.toDouble() ?? maxStat;
+    if (raw > maxStat) {
+      return (raw * maxStat / 100.0).clamp(0.0, maxStat);
+    }
+    return raw.clamp(0.0, maxStat);
+  }
+
+  static bool _readBool(Object? value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      return normalized == 'true' || normalized == '1';
+    }
+    return false;
+  }
 }

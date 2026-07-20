@@ -4,15 +4,15 @@ import 'package:pixel_ui/pixel_ui.dart';
 class AppTheme {
   AppTheme._();
 
-  static const Color backgroundPink = Color(0xFFCD96A8);
-  static const Color appBarPink = Color(0xFFE8B8C8);
+  static const Color backgroundPink = Color.fromARGB(255, 255, 227, 236);
+  static const Color appBarPink = Color.fromARGB(255, 247, 201, 216);
   static const Color textDark = Color(0xFF3D1F2B);
   static const Color textLight = Color(0xFFFFFFFF);
   static const Color borderDark = Color(0xFF5A2A3D);
-  static const Color buttonFill = Color(0xFFE07A9C);
+  static const Color buttonFill = Color.fromARGB(255, 222, 141, 168);
   static const Color buttonPressedFill = Color(0xFFB85A78);
-  static const Color buttonDisabledFill = Color(0xFF9A7A86);
-  static const Color buttonShadow = Color(0xFF5A2A3D);
+  static const Color buttonDisabledFill = Color.fromARGB(255, 187, 153, 166);
+  static const Color buttonShadow = Color.fromARGB(255, 97, 64, 77);
 
   static const PixelShapeStyle panelStyle = PixelShapeStyle(
     corners: PixelCorners.lg,

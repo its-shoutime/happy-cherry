@@ -4,12 +4,14 @@ import 'models/pet.dart';
 
 class InfoButton extends StatelessWidget {
   final Pet pet;
+  final int coins;
   final bool lightsOff;
   final VoidCallback onAbandon;
 
   const InfoButton({
     super.key,
     required this.pet,
+    required this.coins,
     required this.lightsOff,
     required this.onAbandon,
   });
@@ -25,7 +27,7 @@ class InfoButton extends StatelessWidget {
           style: AppTheme.pixelText(fontSize: 20, color: _textColor),
         ),
         content: Text(
-          'This will reset all progress and start over with a new pet.',
+          'This will reset pet progress and start over with a new pet. Your coins will be kept.',
           style: AppTheme.pixelText(fontSize: 16, color: _textColor),
         ),
         actions: [
@@ -58,7 +60,7 @@ class InfoButton extends StatelessWidget {
             'Type: ${pet.type.name}\n'
             'Stage: ${pet.stage.name}\n'
             'Age: ${pet.ageInMinutes} mins\n'
-            'XP: ${pet.xp}';
+            'Coins: $coins';
 
         await showDialog(
           context: context,

@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
+import 'audio_manager.dart';
 import 'game.dart';
 import 'game_state.dart';
 import 'info_button.dart';
@@ -17,6 +18,7 @@ import 'user_input.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await AudioManager.instance.init();
   runApp(const MyApp());
 }
 
@@ -51,6 +53,7 @@ class MyApp extends StatelessWidget {
   }
 
   Future<void> _handleLogout() async {
+    await AudioManager.instance.stopBgm();
     await FirebaseAuth.instance.signOut();
   }
 }
@@ -68,58 +71,65 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late Pet pet;
   late PetTimeTracker timeTracker;
+  int coins = 0;
   bool _isLoading = true;
   bool _isDead = false;
   bool _showFood = false;
   bool _showStars = false;
+  bool _muted = AudioManager.instance.muted;
 
   @override
   void initState() {
     super.initState();
     pet = Pet(name: "Mochi");
-    _startTimeTracker();
-    _loadCachedPet();
+    timeTracker = PetTimeTracker(pet: pet, onTick: _onTick, onDeath: _onDeath);
     _loadGame();
-  }
-
-  void _startTimeTracker() {
-    timeTracker = PetTimeTracker(pet: pet, onTick: _onTick);
-    timeTracker.start();
-  }
-
-  Future<void> _loadCachedPet() async {
-    final cachedPet = await GameState.loadCachedPet(userId: widget.userId);
-    if (!mounted || cachedPet == null) return;
-
-    timeTracker.stop();
-    setState(() {
-      pet = cachedPet;
-      _startTimeTracker();
-    });
+    AudioManager.instance.playBgm();
   }
 
   Future<void> _loadGame() async {
-    final loadedPet = await GameState.loadPet(userId: widget.userId);
-    if (!mounted || loadedPet == null) return;
+    final loaded = await GameState.loadPet(userId: widget.userId);
+    if (!mounted) return;
 
     timeTracker.stop();
     setState(() {
-      pet = loadedPet;
+      if (loaded != null) {
+        pet = loaded.pet;
+        coins = loaded.coins;
+      }
       timeTracker = PetTimeTracker(pet: pet, onTick: _onTick, onDeath: _onDeath);
       timeTracker.start();
       _isLoading = false;
     });
   }
 
+  Future<void> _saveProgress() {
+    return GameState.savePet(pet, coins: coins, userId: widget.userId);
+  }
+
+  Future<void> _logout() async {
+    await _saveProgress();
+    await AudioManager.instance.playButton();
+    await widget.onLogout();
+  }
+
+  Future<void> _toggleMute() async {
+    await AudioManager.instance.toggleMute();
+    if (!mounted) return;
+    setState(() => _muted = AudioManager.instance.muted);
+  }
+
   void _onDeath() {
+    AudioManager.instance.pauseBgm();
+    AudioManager.instance.playDeath();
     setState(() {
       _isDead = true;
     });
-    // Persist the dead state if desired.
-    GameState.savePet(pet);
+    _saveProgress();
   }
 
   void _restartFromDeath() {
+    AudioManager.instance.playButton();
     timeTracker.stop();
     setState(() {
       pet = Pet(name: "Mochi");
@@ -127,10 +137,12 @@ class _HomePageState extends State<HomePage> {
       timeTracker = PetTimeTracker(pet: pet, onTick: _onTick, onDeath: _onDeath);
       timeTracker.start();
     });
-    GameState.savePet(pet);
+    _saveProgress();
+    AudioManager.instance.playBgm();
   }
 
   void _abandonPet() {
+    AudioManager.instance.playButton();
     final petName = pet.name;
     timeTracker.stop();
     setState(() {
@@ -141,13 +153,13 @@ class _HomePageState extends State<HomePage> {
       timeTracker = PetTimeTracker(pet: pet, onTick: _onTick, onDeath: _onDeath);
       timeTracker.start();
     });
-    GameState.deleteSave(userId: widget.userId);
-    GameState.savePet(pet, userId: widget.userId);
+    // Keep account coins when replacing the pet.
+    _saveProgress();
   }
 
   void _onTick() {
     setState(() {});
-    GameState.savePet(pet, userId: widget.userId);
+    _saveProgress();
   }
 
   @override
@@ -177,7 +189,12 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget buildHeartMeter(String label, double value) {
-    final heartUnits = value / 25.0;
+    // 1 unit = half a heart. Use ceil so a segment stays filled until that
+    // whole half-heart has been lost (avoids dropping immediately after refill).
+    final halfHearts = value <= 0
+        ? 0
+        : value.ceil().clamp(0, Pet.maxStat.toInt());
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -188,11 +205,11 @@ class _HomePageState extends State<HomePage> {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: List.generate(4, (index) {
-            final heartValue = (heartUnits - index).clamp(0.0, 1.0);
-            if (heartValue >= 1.0) {
+            final unitsInHeart = (halfHearts - index * 2).clamp(0, 2);
+            if (unitsInHeart >= 2) {
               return const Icon(Icons.favorite, color: Colors.red, size: 28);
             }
-            if (heartValue >= 0.5) {
+            if (unitsInHeart >= 1) {
               return buildHalfHeart();
             }
             return const Icon(
@@ -249,9 +266,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget buildAttentionIndicator() {
-    // Show attention when there are 2 full hearts or less remaining.
-    // Each full heart represents 25 points, so 2 full hearts = 50.
-    final lowHearts = pet.hunger <= 50 || pet.happiness <= 50;
+    // Show attention when there are 2 full hearts or fewer remaining (≤ 4).
+    final lowHearts = pet.hunger <= 4 || pet.happiness <= 4;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -284,8 +300,8 @@ class _HomePageState extends State<HomePage> {
                 pet.attentionSuppressed = false;
                 pet.attentionSeconds = 0;
               }
-              GameState.savePet(pet, userId: widget.userId);
             });
+            _saveProgress();
           },
         ),
       ],
@@ -295,13 +311,16 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Scaffold(
-        appBar: AppBar(
-          title: Text('Happy Cherry', style: pixelBodyText(20)),
-          centerTitle: true,
+      return Theme(
+        data: AppTheme.light(),
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text('Happy Cherry', style: pixelBodyText(20)),
+            centerTitle: true,
+          ),
+          backgroundColor: AppTheme.backgroundPink,
+          body: const Center(child: CircularProgressIndicator()),
         ),
-        backgroundColor: AppTheme.backgroundPink,
-        body: const Center(child: CircularProgressIndicator()),
       );
     }
     if (_isDead) {
@@ -315,22 +334,28 @@ class _HomePageState extends State<HomePage> {
         title: Text(pet.name, style: pixelBodyText(20)),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
+            tooltip: _muted ? 'Unmute' : 'Mute',
+            onPressed: _toggleMute,
+          ),
           RenameButton(
             pet: pet,
             onRename: (newName) {
               setState(() => pet.name = newName);
-              GameState.savePet(pet, userId: widget.userId);
+              _saveProgress();
             },
           ),
           InfoButton(
             pet: pet,
+            coins: coins,
             lightsOff: pet.lightsOff,
             onAbandon: _abandonPet,
           ),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Logout',
-            onPressed: widget.onLogout,
+            onPressed: _logout,
           ),
         ],
       ),
@@ -365,8 +390,7 @@ class _HomePageState extends State<HomePage> {
               buildHeartMeter("Happiness", pet.happiness),
               buildAttentionIndicator(),
               const SizedBox(height: 16),
-              if (DateTime.now().hour >= 23 || DateTime.now().hour < 8)
-                buildLightsControl(),
+              buildLightsControl(),
 
               const SizedBox(height: 18),
 
@@ -375,13 +399,14 @@ UserActions(
   canHeal: pet.isSick,
 
   onFeed: () {
-    if (pet.hunger < 100) {
+    if (pet.hunger < Pet.maxStat) {
+      AudioManager.instance.playFeed();
       setState(() {
         pet.feed();
         _showFood = true;
       });
 
-      GameState.savePet(pet, userId: widget.userId);
+      _saveProgress();
 
       Future.delayed(const Duration(seconds: 2), () {
         if (!mounted) return;
@@ -391,37 +416,49 @@ UserActions(
   },
 
   onPlay: () async {
+    AudioManager.instance.playButton();
     final score = await Navigator.of(context).push<int>(
       MaterialPageRoute(builder: (_) => const CherryCatchGame()),
     );
 
-    if (score != null && score > 3) {
-      setState(() {
-        if (pet.happiness < 100) {
+    if (!mounted) return;
+    AudioManager.instance.playBgm();
+
+    if (score == null) return;
+
+    setState(() {
+      coins += score;
+      if (score > 0) {
+        AudioManager.instance.playCoin();
+      }
+      if (score > 3) {
+        if (pet.happiness < Pet.maxStat) {
           _showStars = true;
         }
         pet.play();
-      });
-
-      GameState.savePet(pet, userId: widget.userId);
-
-      if (_showStars) {
-        Future.delayed(const Duration(seconds: 2), () {
-          if (!mounted) return;
-          setState(() => _showStars = false);
-        });
       }
+    });
+
+    _saveProgress();
+
+    if (_showStars) {
+      Future.delayed(const Duration(seconds: 2), () {
+        if (!mounted) return;
+        setState(() => _showStars = false);
+      });
     }
   },
 
   onClean: () {
+    AudioManager.instance.playClean();
     setState(() => pet.cleanPoop());
-    GameState.savePet(pet, userId: widget.userId);
+    _saveProgress();
   },
 
   onHeal: () {
+    AudioManager.instance.playHeal();
     setState(() => pet.heal());
-    GameState.savePet(pet, userId: widget.userId);
+    _saveProgress();
   },
 ),
 
