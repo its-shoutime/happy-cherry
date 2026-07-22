@@ -1,20 +1,22 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
+// Login UI smoke test — avoids Firebase by pumping LoginPage directly.
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:happy_cherry/main.dart';
+import 'package:happy_cherry/app_theme.dart';
+import 'package:happy_cherry/login.dart';
 
 void main() {
-  testWidgets('App shows login page', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('Login page shows owner login controls', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: const LoginPage(),
+      ),
+    );
 
-    // Verify that the login page is shown by checking for the app bar title
-    expect(find.text('owner login'), findsOneWidget);
-    expect(find.text('login'), findsOneWidget);
+    expect(find.text('Owner login'), findsOneWidget);
+    expect(find.text('Login'), findsOneWidget);
+    expect(find.text('Sign up'), findsOneWidget);
+    expect(find.text('Email or username'), findsOneWidget);
+    expect(find.text('Password'), findsOneWidget);
   });
 }

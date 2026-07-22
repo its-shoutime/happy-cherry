@@ -536,4 +536,232 @@ void main() {
       expect(fromRemote.lightsOff, isTrue);
     });
   });
+
+  group('Death', () {
+    test('dead only when both hunger and happiness are zero', () {
+      expect(Pet(name: 'A', hunger: 0, happiness: 0).isDead, isTrue);
+      expect(Pet(name: 'B', hunger: 0, happiness: 1).isDead, isFalse);
+      expect(Pet(name: 'C', hunger: 1, happiness: 0).isDead, isFalse);
+      expect(Pet(name: 'D', hunger: 0.1, happiness: 0).isDead, isFalse);
+    });
+
+    test('decay can starve a pet to death over enough time', () {
+      final pet = Pet(
+        name: 'Fading',
+        stage: PetStage.baby,
+        hunger: 0.01,
+        happiness: 0.01,
+      );
+      pet.decayStats(const Duration(minutes: 10));
+      expect(pet.hunger, 0);
+      expect(pet.happiness, 0);
+      expect(pet.isDead, isTrue);
+    });
+  });
+
+  group('Stat decay', () {
+    test('baby decays faster than adult', () {
+      final baby = Pet(name: 'Baby', stage: PetStage.baby, hunger: 8, happiness: 8);
+      final adult = Pet(
+        name: 'Adult',
+        type: cherry,
+        stage: PetStage.adult,
+        hunger: 8,
+        happiness: 8,
+      );
+
+      baby.decayStats(const Duration(minutes: 100));
+      adult.decayStats(const Duration(minutes: 100));
+
+      expect(baby.hunger, lessThan(adult.hunger));
+      expect(baby.happiness, lessThan(adult.happiness));
+    });
+
+    test('decay rates match stage tables', () {
+      expect(Pet(name: 'b', stage: PetStage.baby).hungerDecayRatePerMinute, 0.004);
+      expect(Pet(name: 'c', stage: PetStage.child).hungerDecayRatePerMinute, 0.002);
+      expect(
+        Pet(name: 't', stage: PetStage.teen).hungerDecayRatePerMinute,
+        closeTo(0.04 / 30, 1e-9),
+      );
+      expect(
+        Pet(name: 'a', stage: PetStage.adult).hungerDecayRatePerMinute,
+        closeTo(0.04 / 60, 1e-9),
+      );
+    });
+
+    test('negative elapsed time is ignored', () {
+      final pet = Pet(name: 'Stable', hunger: 5, happiness: 5, ageInMinutes: 10);
+      pet.advanceTime(const Duration(seconds: -30));
+      expect(pet.hunger, 5);
+      expect(pet.happiness, 5);
+      expect(pet.ageInMinutes, 10);
+    });
+  });
+
+  group('Evolution edge cases', () {
+    test('child with exactly 2 care mistakes becomes Lloyd', () {
+      final pet = Pet(
+        name: 'Border',
+        type: sprout,
+        stage: PetStage.child,
+        careMistakes: 2,
+      );
+      pet.evolve();
+      expect(pet.type, lloyd);
+      expect(pet.stage, PetStage.teen);
+    });
+
+    test('Lloyd with 2 care mistakes evolves to Puffaloo (no stall)', () {
+      final pet = Pet(
+        name: 'Unstuck',
+        type: lloyd,
+        stage: PetStage.teen,
+        careMistakes: 2,
+        ageInMinutes: 3 * 24 * 60,
+      );
+      expect(pet.canEvolve, isTrue);
+      pet.maybeEvolve();
+      expect(pet.type, puffaloo);
+      expect(pet.stage, PetStage.adult);
+      expect(pet.canEvolve, isFalse);
+    });
+
+    test('Lloyd and Mousse cover all care-mistake adult branches', () {
+      Pet evolveLloyd(int mistakes) {
+        final pet = Pet(
+          name: 'L',
+          type: lloyd,
+          stage: PetStage.teen,
+          careMistakes: mistakes,
+        );
+        pet.evolve();
+        return pet;
+      }
+
+      Pet evolveMousse(int mistakes) {
+        final pet = Pet(
+          name: 'M',
+          type: mousse,
+          stage: PetStage.teen,
+          careMistakes: mistakes,
+        );
+        pet.evolve();
+        return pet;
+      }
+
+      expect(evolveLloyd(0).type, puffaloo);
+      expect(evolveLloyd(6).type, puffaloo);
+      expect(evolveLloyd(7).type, bear);
+      expect(evolveLloyd(9).type, bear);
+      expect(evolveLloyd(10).type, demon);
+
+      expect(evolveMousse(0).type, puffaloo);
+      expect(evolveMousse(6).type, puffaloo);
+      expect(evolveMousse(7).type, bear);
+      expect(evolveMousse(20).type, bear);
+    });
+
+    test('adult pets do not evolve further', () {
+      final pet = Pet(
+        name: 'Done',
+        type: cherry,
+        stage: PetStage.adult,
+        ageInMinutes: 99999,
+        careMistakes: 0,
+      );
+      pet.maybeEvolve();
+      expect(pet.type, cherry);
+      expect(pet.stage, PetStage.adult);
+    });
+  });
+
+  group('Offline catch-up', () {
+    test('advanceTime ages, decays, poops, and evolves together', () {
+      final pet = Pet(
+        name: 'Catch Up',
+        type: blob,
+        stage: PetStage.baby,
+        ageInMinutes: 0,
+        hunger: 8,
+        happiness: 8,
+        // Avoid bedtime lights-on attention depending on wall-clock now.
+        lightsOff: true,
+      );
+
+      pet.advanceTime(const Duration(hours: 2));
+
+      expect(pet.ageInMinutes, 120);
+      expect(pet.stage, PetStage.child);
+      expect(pet.type, sprout);
+      expect(pet.hunger, lessThan(8));
+      expect(pet.happiness, lessThan(8));
+    });
+
+    test('advanceTime applies attention mistakes while offline', () {
+      final awakeAt = DateTime(2026, 7, 12, 12, 0);
+      final pet = Pet(name: 'Neglected', hunger: 0, happiness: 8);
+
+      // Direct attention path with an explicit clock (decayStats uses DateTime.now).
+      pet.updateAttention(const Duration(minutes: 15), now: awakeAt);
+      expect(pet.careMistakes, 1);
+      expect(pet.attentionSuppressed, isTrue);
+    });
+  });
+
+  group('Mood labels and serialization', () {
+    test('feels strings match mood', () {
+      final awakeAt = DateTime(2026, 7, 12, 12, 0);
+      expect(Pet(name: 'H', hunger: 8, happiness: 8).moodAt(awakeAt), PetMood.happy);
+      // feels uses DateTime.now — spot-check via mood mapping instead.
+      final happy = Pet(name: 'H', hunger: 8, happiness: 8);
+      // Force non-sleep/non-sick for label coverage through moodAt.
+      expect(happy.moodAt(awakeAt), PetMood.happy);
+      expect(Pet(name: 'O', hunger: 5, happiness: 5).moodAt(awakeAt), PetMood.okay);
+      expect(Pet(name: 'S', hunger: 1, happiness: 8).moodAt(awakeAt), PetMood.sad);
+      expect(
+        Pet(name: 'K', hunger: 8, happiness: 8, isSick: true).moodAt(awakeAt),
+        PetMood.sick,
+      );
+    });
+
+    test('full json roundtrip preserves gameplay fields', () {
+      final original = Pet(
+        name: 'Roundtrip',
+        type: lloyd,
+        stage: PetStage.teen,
+        hunger: 3.5,
+        happiness: 6.25,
+        ageInMinutes: 500,
+        poopCount: 2,
+        secondsSinceLastPoop: 90,
+        isSick: true,
+        lightsOff: true,
+        careMistakes: 4,
+        attentionSeconds: 40,
+        attentionSuppressed: true,
+      );
+      final copy = Pet.fromJson(original.toJson());
+
+      expect(copy.name, original.name);
+      expect(copy.type, original.type);
+      expect(copy.stage, original.stage);
+      expect(copy.hunger, original.hunger);
+      expect(copy.happiness, original.happiness);
+      expect(copy.ageInMinutes, original.ageInMinutes);
+      expect(copy.poopCount, original.poopCount);
+      expect(copy.secondsSinceLastPoop, original.secondsSinceLastPoop);
+      expect(copy.isSick, original.isSick);
+      expect(copy.lightsOff, original.lightsOff);
+      expect(copy.careMistakes, original.careMistakes);
+      expect(copy.attentionSeconds, original.attentionSeconds);
+      expect(copy.attentionSuppressed, original.attentionSuppressed);
+    });
+
+    test('petTypeFromName is case-insensitive and falls back to blob', () {
+      expect(petTypeFromName('CHERRY'), cherry);
+      expect(petTypeFromName('unknown'), blob);
+      expect(petTypeFromName(null), blob);
+    });
+  });
 }

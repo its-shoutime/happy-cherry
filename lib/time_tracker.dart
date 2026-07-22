@@ -6,28 +6,37 @@ class PetTimeTracker {
   final Pet pet;
   final VoidCallback onTick;
   final VoidCallback? onDeath;
+  final Duration tickInterval;
   Timer? _timer;
   int _tickCount = 0;
 
-  PetTimeTracker({required this.pet, required this.onTick, this.onDeath});
+  PetTimeTracker({
+    required this.pet,
+    required this.onTick,
+    this.onDeath,
+    this.tickInterval = const Duration(seconds: 5),
+  });
 
   void start() {
     _tickCount = 0;
-    _timer = Timer.periodic(const Duration(seconds: 5), (_) {
-      pet.decayStats();
-      if (pet.isDead) {
-        stop();
-        if (onDeath != null) onDeath!();
-        return;
-      }
+    _timer = Timer.periodic(tickInterval, (_) => handleTick());
+  }
 
-      _tickCount += 1;
-      if (_tickCount % 12 == 0) {
-        pet.ageInMinutes += 1;
-        pet.maybeEvolve();
-      }
-      onTick();
-    });
+  /// One simulation step — also used by tests without waiting on a Timer.
+  void handleTick() {
+    pet.decayStats();
+    if (pet.isDead) {
+      stop();
+      onDeath?.call();
+      return;
+    }
+
+    _tickCount += 1;
+    if (_tickCount % 12 == 0) {
+      pet.ageInMinutes += 1;
+      pet.maybeEvolve();
+    }
+    onTick();
   }
 
   void stop() {
