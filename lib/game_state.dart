@@ -269,7 +269,8 @@ class GameState {
         await FirebaseFirestore.instance
             .collection('users')
             .doc(userId)
-            .set(saveData);
+            .set(saveData)
+            .timeout(const Duration(seconds: 8));
       } catch (error, stackTrace) {
         debugPrint('Failed to save remote progress: $error\n$stackTrace');
       }
