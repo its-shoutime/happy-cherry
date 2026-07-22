@@ -171,8 +171,12 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _logout() async {
-    await _saveProgress();
-    await AudioManager.instance.playButton();
+    timeTracker.stop();
+    AudioManager.instance.playButton();
+    // Don't let a slow/hung Firestore write block sign-out.
+    try {
+      await _saveProgress().timeout(const Duration(seconds: 3));
+    } catch (_) {}
     await widget.onLogout();
   }
 

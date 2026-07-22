@@ -157,7 +157,13 @@ class Pet {
 
   void maybeEvolve() {
     while (canEvolve) {
+      final previousType = type;
+      final previousStage = stage;
       evolve();
+      // Guard against incomplete evolution rules hanging the tick loop.
+      if (identical(type, previousType) && stage == previousStage) {
+        break;
+      }
     }
   }
 
@@ -271,24 +277,23 @@ class Pet {
           }
           stage = PetStage.adult;
         } else if (type == lloyd) {
+          // Child→Lloyd can happen at exactly 2 mistakes; treat ≤2 as the
+          // best Lloyd-line adult so evolution never stalls.
           if (careMistakes >= 10) {
             type = demon;
-            stage = PetStage.adult;
-          } else if (careMistakes >= 3 && careMistakes <= 6) {
-            type = puffaloo;
-            stage = PetStage.adult;
           } else if (careMistakes >= 7) {
             type = bear;
-            stage = PetStage.adult;
+          } else {
+            type = puffaloo;
           }
+          stage = PetStage.adult;
         } else if (type == mousse) {
-          if (careMistakes >= 3 && careMistakes <= 6) {
-            type = puffaloo;
-            stage = PetStage.adult;
-          } else if (careMistakes >= 7) {
+          if (careMistakes >= 7) {
             type = bear;
-            stage = PetStage.adult;
+          } else {
+            type = puffaloo;
           }
+          stage = PetStage.adult;
         }
         break;
       case PetStage.adult:

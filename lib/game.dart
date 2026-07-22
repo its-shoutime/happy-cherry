@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import 'audio_manager.dart';
+import 'cherry_catch_logic.dart';
 
 class CherryCatchGame extends StatefulWidget {
   const CherryCatchGame({super.key});
@@ -13,21 +14,9 @@ class CherryCatchGame extends StatefulWidget {
 }
 
 class _CherryCatchGameState extends State<CherryCatchGame> {
-  static const double cherrySize = 45.0;
-  static const double basketWidth = 70.0;
-
-  double cherryX = 150;
-  double cherryY = 0;
-  double basketX = 150;
-  double gameWidth = 300;
-
-  int score = 0;
-  int lives = 3;
-
-  bool gameOver = false;
-  Timer? gameTimer;
-
+  final CherryCatchLogic _logic = CherryCatchLogic();
   final Random random = Random();
+  Timer? gameTimer;
 
   @override
   void initState() {
@@ -44,72 +33,44 @@ class _CherryCatchGameState extends State<CherryCatchGame> {
     // Chrome users keep local persistence in the pet state only.
   }
 
-  double get maxCherryX => max(gameWidth - cherrySize, 0);
-  double get maxBasketX => max(gameWidth - basketWidth, 0);
-
   void startGame() {
     gameTimer?.cancel();
 
     setState(() {
-      score = 0;
-      lives = 1;
-      gameOver = false;
-      cherryY = 0;
-      cherryX = random.nextDouble() * maxCherryX;
-      basketX = gameWidth / 2;
-      if (basketX > maxBasketX) {
-        basketX = maxBasketX;
-      }
+      _logic.start(
+        randomCherryX: () => random.nextDouble() * _logic.maxCherryX,
+      );
     });
 
     gameTimer = Timer.periodic(const Duration(milliseconds: 30), (timer) {
-      if (gameOver) return;
+      if (_logic.gameOver) return;
 
       setState(() {
-        cherryY += 5;
+        final previousLives = _logic.lives;
+        final previousScore = _logic.score;
+        _logic.tick(
+          randomCherryX: () => random.nextDouble() * _logic.maxCherryX,
+        );
 
-        if (cherryY > 650) {
-          lives--;
-          resetCherry();
+        if (_logic.score > previousScore) {
+          AudioManager.instance.playCatch();
           _saveGameState();
-          if (lives <= 0) {
-            gameOver = true;
+        } else if (_logic.lives < previousLives) {
+          _saveGameState();
+          if (_logic.gameOver) {
             gameTimer?.cancel();
             AudioManager.instance.playGameOver();
           } else {
             AudioManager.instance.playMiss();
           }
         }
-
-        if (!gameOver &&
-            cherryY > 560 &&
-            cherryX > basketX - 30 &&
-            cherryX < basketX + 90) {
-          score++;
-          AudioManager.instance.playCatch();
-          resetCherry();
-          _saveGameState();
-        }
       });
     });
   }
 
-  void resetCherry() {
-    cherryY = 0;
-    cherryX = random.nextDouble() * maxCherryX;
-  }
-
   void moveBasket(DragUpdateDetails details) {
     setState(() {
-      basketX += details.delta.dx;
-
-      if (basketX < 0) {
-        basketX = 0;
-      }
-
-      if (basketX > maxBasketX) {
-        basketX = maxBasketX;
-      }
+      _logic.moveBasket(details.delta.dx);
     });
   }
 
@@ -130,7 +91,7 @@ class _CherryCatchGameState extends State<CherryCatchGame> {
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          gameWidth = constraints.maxWidth;
+          _logic.gameWidth = constraints.maxWidth;
           return GestureDetector(
             onHorizontalDragUpdate: moveBasket,
             child: Stack(
@@ -139,7 +100,7 @@ class _CherryCatchGameState extends State<CherryCatchGame> {
                   top: 20,
                   left: 20,
                   child: Text(
-                    'Score: $score',
+                    'Score: ${_logic.score}',
                     style: const TextStyle(fontSize: 24),
                   ),
                 ),
@@ -148,25 +109,28 @@ class _CherryCatchGameState extends State<CherryCatchGame> {
                   top: 20,
                   right: 20,
                   child: Text(
-                    'Lives: $lives',
+                    'Lives: ${_logic.lives}',
                     style: const TextStyle(fontSize: 24),
                   ),
                 ),
 
-                if (!gameOver)
+                if (!_logic.gameOver)
                   Positioned(
-                    left: cherryX,
-                    top: cherryY,
-                    child: const Text('🍒', style: TextStyle(fontSize: 45)),
+                    left: _logic.cherryX,
+                    top: _logic.cherryY,
+                    child: const Text(
+                      '🍒',
+                      style: TextStyle(fontSize: CherryCatchLogic.cherrySize),
+                    ),
                   ),
 
                 Positioned(
-                  left: basketX,
+                  left: _logic.basketX,
                   bottom: 40,
                   child: const Text('🧺', style: TextStyle(fontSize: 70)),
                 ),
 
-                if (gameOver)
+                if (_logic.gameOver)
                   Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -179,7 +143,7 @@ class _CherryCatchGameState extends State<CherryCatchGame> {
                           ),
                         ),
                         Text(
-                          'Final Score: $score',
+                          'Final Score: ${_logic.score}',
                           style: const TextStyle(fontSize: 26),
                         ),
                         const SizedBox(height: 20),
@@ -187,7 +151,7 @@ class _CherryCatchGameState extends State<CherryCatchGame> {
                           onPressed: () {
                             AudioManager.instance.playButton();
                             if (Navigator.canPop(context)) {
-                              Navigator.pop(context, score);
+                              Navigator.pop(context, _logic.score);
                             }
                           },
                           child: const Text('Home'),

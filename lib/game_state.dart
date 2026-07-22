@@ -285,15 +285,24 @@ class GameState {
         await FirebaseFirestore.instance
             .collection('users')
             .doc(userId)
-            .set(saveData);
-      } on FirebaseException catch (error, stackTrace) {
-        if (error.code == 'unavailable' ||
-            error.code == 'failed-precondition') {
-          debugPrint('Save queued offline, will sync when online: $error');
-        } else {
-          debugPrint('Failed to save remote progress: $error\n$stackTrace');
-          rethrow;
-        }
+            .set(saveData)
+            .timeout(const Duration(seconds: 8));
+      } catch (error, stackTrace) {
+        debugPrint('Failed to save remote progress: $error\n$stackTrace');
+            .set(saveData)
+    .timeout(const Duration(seconds: 8));
+} on FirebaseException catch (error, stackTrace) {
+  if (error.code == 'unavailable' || 
+      error.code == 'failed-precondition') {
+    debugPrint('Save queued offline, will sync when online: $error');
+  } else {
+    debugPrint('Failed to save remote progress: $error\n$stackTrace');
+    rethrow;
+  }
+} catch (error, stackTrace) {
+  // Catch-all for non-Firebase errors or timeout exceptions
+  debugPrint('Failed to save remote progress: $error\n$stackTrace');
+}
       }
     });
 
