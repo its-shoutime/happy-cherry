@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +19,7 @@ import 'pet_animation.dart';
 import 'rename_button.dart';
 import 'time_tracker.dart';
 import 'user_input.dart';
+import 'wardrobe_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,6 +55,11 @@ class _AppInitializerState extends State<AppInitializer> {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: true,
+      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+    );
+    await FirebaseFirestore.instance.enableNetwork();
     await AudioManager.instance.init();
   }
 
@@ -100,7 +109,11 @@ class _AppInitializerState extends State<AppInitializer> {
 
   Future<void> _handleLogout() async {
     await AudioManager.instance.stopBgm();
-    await FirebaseAuth.instance.signOut();
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (error, stackTrace) {
+      debugPrint('Error during sign out: $error\n$stackTrace');
+    }
   }
 }
 
@@ -161,6 +174,25 @@ class _HomePageState extends State<HomePage> {
     await _saveProgress();
     await AudioManager.instance.playButton();
     await widget.onLogout();
+  }
+
+  Future<void> _openWardrobe() async {
+    if (!mounted) return;
+    await AudioManager.instance.playButton();
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => WardrobePage(
+          pet: pet,
+          onAccessorySelected: (accessory) {
+            setState(() {
+              pet.accessory = accessory;
+            });
+            unawaited(_saveProgress());
+          },
+        ),
+      ),
+    );
   }
 
   Future<void> _toggleMute() async {
@@ -438,6 +470,95 @@ class _HomePageState extends State<HomePage> {
                 buildAttentionIndicator(),
                 const SizedBox(height: 16),
                 buildLightsControl(),
+
+                const SizedBox(height: 18),
+
+                Center(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: _openWardrobe,
+                      child: Container(
+                        width: 220,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          color: AppTheme.buttonFill,
+                          border: Border.all(
+                            color: AppTheme.borderDark,
+                            width: 1,
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x40000000),
+                              offset: Offset(2, 2),
+                              blurRadius: 0,
+                            ),
+                          ],
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Positioned(
+                              top: 8,
+                              left: 20,
+                              right: 20,
+                              child: Container(
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: AppTheme.appBarPink,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              left: 44,
+                              top: 24,
+                              child: Container(
+                                width: 10,
+                                height: 18,
+                                decoration: BoxDecoration(
+                                  color: AppTheme.borderDark,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              right: 44,
+                              top: 24,
+                              child: Container(
+                                width: 10,
+                                height: 18,
+                                decoration: BoxDecoration(
+                                  color: AppTheme.borderDark,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                            ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.checkroom,
+                                  size: 22,
+                                  color: AppTheme.textDark,
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  'Shop',
+                                  style: AppTheme.buttonLabel(
+                                    AppTheme.textDark,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
 
                 const SizedBox(height: 18),
 

@@ -42,6 +42,15 @@ class PetGraphic extends StatelessWidget {
               // Pet image centered
               Image.asset(pet.assetPath, height: height, fit: BoxFit.contain),
 
+              if (pet.accessory != null && pet.accessory!.isNotEmpty)
+                Positioned(
+                  top: height * 0.16,
+                  child: Text(
+                    _accessoryEmoji(pet.accessory!),
+                    style: TextStyle(fontSize: height * 0.16),
+                  ),
+                ),
+
               if (pet.attentionVisible)
                 Align(
                   alignment: Alignment.topCenter,
@@ -113,5 +122,22 @@ class PetGraphic extends StatelessWidget {
         );
       },
     );
+  }
+
+  String _accessoryEmoji(String accessory) {
+    switch (accessory) {
+      case 'hat':
+        return '🎩';
+      case 'bow':
+        return '🎀';
+      case 'glasses':
+        return '🕶️';
+      case 'crown':
+        return '👑';
+      case 'scarf':
+        return '🧣';
+      default:
+        return '';
+    }
   }
 }

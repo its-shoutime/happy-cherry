@@ -60,7 +60,10 @@ class GameState {
     return null;
   }
 
-  static int _readCoins(Map<String, dynamic> decoded, Map<String, dynamic> petJson) {
+  static int _readCoins(
+    Map<String, dynamic> decoded,
+    Map<String, dynamic> petJson,
+  ) {
     final accountCoins = (decoded['coins'] as num?)?.toInt();
     if (accountCoins != null) {
       return accountCoins;
@@ -117,9 +120,16 @@ class GameState {
       if (data == null) return null;
 
       return _decodeStoredSave(Map<String, dynamic>.from(data));
+    } on FirebaseException catch (error, stackTrace) {
+      if (error.code == 'unavailable' || error.code == 'failed-precondition') {
+        debugPrint('Firestore offline, using cached save: $error\n$stackTrace');
+        return null;
+      }
+      debugPrint('Unexpected Firestore error: $error\n$stackTrace');
+      rethrow;
     } catch (error, stackTrace) {
       debugPrint('Failed to load remote save: $error\n$stackTrace');
-      return null;
+      rethrow;
     }
   }
 
@@ -173,10 +183,7 @@ class GameState {
       } catch (_) {}
     }
 
-    await prefs.setString(
-      key,
-      jsonEncode(_savePayload(pet, coins, savedAt)),
-    );
+    await prefs.setString(key, jsonEncode(_savePayload(pet, coins, savedAt)));
   }
 
   static Future<({Pet pet, int coins})?> loadCachedPet({String? userId}) async {
@@ -210,7 +217,20 @@ class GameState {
       onLocalReady(previewPet, previewCoins);
     }
 
-    final remote = await remoteFuture;
+    ({Pet pet, int coins, DateTime savedAt})? remote;
+    try {
+      remote = await remoteFuture;
+    } on FirebaseException catch (error, stackTrace) {
+      if (error.code == 'unavailable' || error.code == 'failed-precondition') {
+        debugPrint(
+          'Remote load failed due to offline mode: $error\n$stackTrace',
+        );
+        remote = null;
+      } else {
+        rethrow;
+      }
+    }
+
     final stored = _pickNewestSave(local, remote);
     if (stored == null) {
       if (previewPet == null || previewCoins == null) return null;
@@ -231,7 +251,7 @@ class GameState {
     final syncedAt = DateTime.now();
     unawaited(_cacheSave(userId, resultPet, resultCoins, syncedAt));
 
-    if (remote == null || identical(stored, local)) {
+    if (remote != null && identical(stored, local)) {
       unawaited(
         FirebaseFirestore.instance
             .collection('users')
@@ -246,11 +266,7 @@ class GameState {
     return (pet: resultPet, coins: resultCoins);
   }
 
-  static Future<void> savePet(
-    Pet pet, {
-    required int coins,
-    String? userId,
-  }) {
+  static Future<void> savePet(Pet pet, {required int coins, String? userId}) {
     // Snapshot state now; run after prior saves so order is preserved.
     final petSnapshot = Pet.fromJson(pet.toJson());
     final coinsSnapshot = coins;
@@ -270,8 +286,14 @@ class GameState {
             .collection('users')
             .doc(userId)
             .set(saveData);
-      } catch (error, stackTrace) {
-        debugPrint('Failed to save remote progress: $error\n$stackTrace');
+      } on FirebaseException catch (error, stackTrace) {
+        if (error.code == 'unavailable' ||
+            error.code == 'failed-precondition') {
+          debugPrint('Save queued offline, will sync when online: $error');
+        } else {
+          debugPrint('Failed to save remote progress: $error\n$stackTrace');
+          rethrow;
+        }
       }
     });
 
@@ -323,10 +345,7 @@ class GameState {
     }
 
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .delete();
+      await FirebaseFirestore.instance.collection('users').doc(userId).delete();
     } catch (error, stackTrace) {
       debugPrint('Failed to delete remote save: $error\n$stackTrace');
     }
