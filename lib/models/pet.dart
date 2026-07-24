@@ -172,26 +172,26 @@ class Pet {
   double get hungerDecayRatePerMinute {
     switch (stage) {
       case PetStage.baby:
-        return 0.04 / 10; // 0.004 per minute (scaled from 0–100)
+        return maxStat / 40; // full → empty in 40 minutes
       case PetStage.child:
-        return 0.04 / 20;
+        return maxStat / 120; // full → empty in 2 hours
       case PetStage.teen:
-        return 0.04 / 30;
+        return maxStat / 240; // full → empty in 4 hours
       case PetStage.adult:
-        return 0.04 / 60;
+        return maxStat / 480; // full → empty in 8 hours
     }
   }
 
   double get happinessDecayRatePerMinute {
     switch (stage) {
       case PetStage.baby:
-        return 0.04 / 10;
+        return maxStat / 40;
       case PetStage.child:
-        return 0.04 / 20;
+        return maxStat / 120;
       case PetStage.teen:
-        return 0.04 / 30;
+        return maxStat / 240;
       case PetStage.adult:
-        return 0.04 / 60;
+        return maxStat / 480;
     }
   }
 

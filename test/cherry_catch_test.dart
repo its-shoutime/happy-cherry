@@ -10,6 +10,7 @@ void main() {
       expect(game.lives, 3);
       expect(game.score, 0);
       expect(game.gameOver, isFalse);
+      expect(game.cherries, hasLength(1));
       expect(game.cherryY, 0);
       expect(game.basketX, 150);
     });
@@ -31,12 +32,13 @@ void main() {
         cherryY: CherryCatchLogic.catchY + 1,
       );
 
-      expect(game.isCatching(), isTrue);
+      expect(game.isCatchingCherry(game.cherries.first), isTrue);
       final reset = game.tick(randomCherryX: () => 40);
       expect(reset, isTrue);
       expect(game.score, 1);
       expect(game.lives, 3);
-      expect(game.cherryY, 0);
+      expect(game.cherries, isNotEmpty);
+      expect(game.cherryY, lessThanOrEqualTo(0));
       expect(game.cherryX, 40);
     });
 
@@ -52,7 +54,7 @@ void main() {
       game.tick(randomCherryX: () => 10);
       expect(game.lives, 2);
       expect(game.score, 0);
-      expect(game.cherryY, 0);
+      expect(game.cherries, isNotEmpty);
       expect(game.gameOver, isFalse);
     });
 
@@ -70,15 +72,56 @@ void main() {
       expect(game.gameOver, isTrue);
 
       // Further ticks are no-ops while game over.
-      final beforeY = game.cherryY;
+      final beforeCount = game.cherries.length;
       expect(game.tick(randomCherryX: () => 10), isFalse);
-      expect(game.cherryY, beforeY);
+      expect(game.cherries, hasLength(beforeCount));
     });
 
-    test('falling cherries move by fallSpeed each tick', () {
+    test('falling cherries move by currentFallSpeed each tick', () {
       final game = CherryCatchLogic(cherryY: 0, cherryX: 0, basketX: 200);
       game.tick(randomCherryX: () => 0);
-      expect(game.cherryY, CherryCatchLogic.fallSpeed);
+      expect(game.cherryY, CherryCatchLogic.baseFallSpeed);
+    });
+
+    test('fall speed increases with score and caps at max', () {
+      final game = CherryCatchLogic(score: 0);
+      expect(game.currentFallSpeed, CherryCatchLogic.baseFallSpeed);
+
+      game.score = 10;
+      expect(
+        game.currentFallSpeed,
+        CherryCatchLogic.baseFallSpeed + 10 * CherryCatchLogic.fallSpeedPerPoint,
+      );
+
+      game.score = 1000;
+      expect(game.currentFallSpeed, CherryCatchLogic.maxFallSpeed);
+    });
+
+    test('active cherry count rises with score', () {
+      final game = CherryCatchLogic(gameWidth: 300);
+      game.start(randomCherryX: () => 50);
+      expect(game.targetCherryCount, 1);
+      expect(game.cherries, hasLength(1));
+
+      game.score = CherryCatchLogic.scorePerExtraCherry;
+      game.tick(randomCherryX: () => 80);
+      expect(game.targetCherryCount, 2);
+      expect(game.cherries, hasLength(2));
+
+      game.score = CherryCatchLogic.scorePerExtraCherry * 10;
+      game.tick(randomCherryX: () => 20);
+      expect(game.targetCherryCount, CherryCatchLogic.maxActiveCherries);
+      expect(game.cherries, hasLength(CherryCatchLogic.maxActiveCherries));
+    });
+
+    test('cashOut ends the run without changing score or lives', () {
+      final game = CherryCatchLogic(score: 7, lives: 2);
+      game.cashOut();
+
+      expect(game.gameOver, isTrue);
+      expect(game.score, 7);
+      expect(game.lives, 2);
+      expect(game.tick(randomCherryX: () => 0), isFalse);
     });
 
     test('play reward threshold matches home screen rule (score > 3)', () {
