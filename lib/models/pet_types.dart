@@ -49,7 +49,7 @@ const PetType mousse = PetType(
 );
 
 const PetType starfruit = PetType(
-  name: 'starfruit',
+  name: 'Starfruit',
   assetPath: 'assets/pets/starfruit',
   bedTime: Duration(hours: 23), // 11pm–8am
   wakeTime: Duration(hours: 8),

@@ -27,7 +27,7 @@ class InfoButton extends StatelessWidget {
           style: AppTheme.pixelText(fontSize: 20, color: _textColor),
         ),
         content: Text(
-          'This will reset pet progress and start over with a new pet. Your coins will be kept.',
+          'This will reset pet progress and start over with a new pet. Your coins and owned clothing will be kept.',
           style: AppTheme.pixelText(fontSize: 16, color: _textColor),
         ),
         actions: [

@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import 'models/accessory_graphic.dart';
 import 'models/pet.dart';
 
 class PetGraphic extends StatelessWidget {
@@ -44,10 +45,10 @@ class PetGraphic extends StatelessWidget {
 
               if (pet.accessory != null && pet.accessory!.isNotEmpty)
                 Positioned(
-                  top: height * 0.16,
-                  child: Text(
-                    _accessoryEmoji(pet.accessory!),
-                    style: TextStyle(fontSize: height * 0.16),
+                  top: height * 0.08,
+                  child: AccessoryGraphic(
+                    accessoryId: pet.accessory,
+                    size: height * 0.28,
                   ),
                 ),
 
@@ -122,22 +123,5 @@ class PetGraphic extends StatelessWidget {
         );
       },
     );
-  }
-
-  String _accessoryEmoji(String accessory) {
-    switch (accessory) {
-      case 'hat':
-        return '🎩';
-      case 'bow':
-        return '🎀';
-      case 'glasses':
-        return '🕶️';
-      case 'crown':
-        return '👑';
-      case 'scarf':
-        return '🧣';
-      default:
-        return '';
-    }
   }
 }

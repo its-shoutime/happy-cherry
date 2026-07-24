@@ -5,7 +5,11 @@
             "name": "happy_cherry (Chrome)",
             "request": "launch",
             "type": "dart",
-            "deviceId": "chrome"
+            "deviceId": "chrome",
+            "toolArgs": [
+                "--web-port=5555",
+                "--web-browser-flag=--user-data-dir=${workspaceFolder}/.dart_tool/chrome-user-data"
+            ]
         }
     ]
 }

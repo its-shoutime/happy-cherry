@@ -578,15 +578,21 @@ void main() {
     });
 
     test('decay rates match stage tables', () {
-      expect(Pet(name: 'b', stage: PetStage.baby).hungerDecayRatePerMinute, 0.004);
-      expect(Pet(name: 'c', stage: PetStage.child).hungerDecayRatePerMinute, 0.002);
+      expect(
+        Pet(name: 'b', stage: PetStage.baby).hungerDecayRatePerMinute,
+        Pet.maxStat / 40,
+      );
+      expect(
+        Pet(name: 'c', stage: PetStage.child).hungerDecayRatePerMinute,
+        Pet.maxStat / 120,
+      );
       expect(
         Pet(name: 't', stage: PetStage.teen).hungerDecayRatePerMinute,
-        closeTo(0.04 / 30, 1e-9),
+        Pet.maxStat / 240,
       );
       expect(
         Pet(name: 'a', stage: PetStage.adult).hungerDecayRatePerMinute,
-        closeTo(0.04 / 60, 1e-9),
+        Pet.maxStat / 480,
       );
     });
 
@@ -689,13 +695,15 @@ void main() {
         lightsOff: true,
       );
 
+      // 2 hours offline: baby empties in 40 minutes, so neglected care
+      // evolves to squeaky rather than sprout.
       pet.advanceTime(const Duration(hours: 2));
 
       expect(pet.ageInMinutes, 120);
       expect(pet.stage, PetStage.child);
-      expect(pet.type, sprout);
-      expect(pet.hunger, lessThan(8));
-      expect(pet.happiness, lessThan(8));
+      expect(pet.type, squeaky);
+      expect(pet.hunger, 0);
+      expect(pet.happiness, 0);
     });
 
     test('advanceTime applies attention mistakes while offline', () {

@@ -2,16 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:pixel_ui/pixel_ui.dart';
 
 import 'app_theme.dart';
+import 'models/accessories.dart';
+import 'models/accessory_graphic.dart';
 import 'models/pet.dart';
 import 'pet_animation.dart';
 
+/// Equip clothing the account already owns.
 class WardrobePage extends StatefulWidget {
   final Pet pet;
+  final Set<String> ownedAccessories;
   final ValueChanged<String?> onAccessorySelected;
 
   const WardrobePage({
     super.key,
     required this.pet,
+    required this.ownedAccessories,
     required this.onAccessorySelected,
   });
 
@@ -20,51 +25,22 @@ class WardrobePage extends StatefulWidget {
 }
 
 class _WardrobePageState extends State<WardrobePage> {
-  late String? _selectedAccessory = widget.pet.accessory;
+  late String? _selectedAccessory = widget.pet.accessory == null
+      ? null
+      : AccessoryCatalog.canonicalizeId(widget.pet.accessory!);
 
-  final List<_AccessoryOption> _options = const [
-    _AccessoryOption(
-      id: null,
-      label: 'None',
-      emoji: '✨',
-      description: 'Default look',
-    ),
-    _AccessoryOption(
-      id: 'hat',
-      label: 'Hat',
-      emoji: '🎩',
-      description: 'A tiny topper',
-    ),
-    _AccessoryOption(
-      id: 'bow',
-      label: 'Bow',
-      emoji: '🎀',
-      description: 'Cute and bright',
-    ),
-    _AccessoryOption(
-      id: 'glasses',
-      label: 'Glasses',
-      emoji: '🕶️',
-      description: 'Cool and clever',
-    ),
-    _AccessoryOption(
-      id: 'crown',
-      label: 'Crown',
-      emoji: '👑',
-      description: 'Royal style',
-    ),
-    _AccessoryOption(
-      id: 'scarf',
-      label: 'Scarf',
-      emoji: '🧣',
-      description: 'Warm and cozy',
-    ),
-  ];
+  List<AccessoryItem> get _ownedItems {
+    final owned = AccessoryCatalog.canonicalizeOwned(widget.ownedAccessories);
+    return AccessoryCatalog.all
+        .where((item) => owned.contains(item.id))
+        .toList();
+  }
 
   @override
   Widget build(BuildContext context) {
     final previewPet = Pet.fromJson(widget.pet.toJson())
       ..accessory = _selectedAccessory;
+    final ownedItems = _ownedItems;
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundPink,
@@ -81,8 +57,11 @@ class _WardrobePageState extends State<WardrobePage> {
         child: Column(
           children: [
             Text(
-              'Choose an accessory',
+              ownedItems.isEmpty
+                  ? 'No clothes yet — visit the Shop!'
+                  : 'Equip owned clothing',
               style: AppTheme.pixelText(fontSize: 18, color: AppTheme.textDark),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
             SizedBox(
@@ -92,7 +71,7 @@ class _WardrobePageState extends State<WardrobePage> {
             const SizedBox(height: 20),
             Expanded(
               child: GridView.builder(
-                itemCount: _options.length,
+                itemCount: ownedItems.length + 1,
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 3,
                   mainAxisSpacing: 10,
@@ -100,56 +79,24 @@ class _WardrobePageState extends State<WardrobePage> {
                   childAspectRatio: 0.95,
                 ),
                 itemBuilder: (context, index) {
-                  final option = _options[index];
-                  final selected = _selectedAccessory == option.id;
+                  if (index == 0) {
+                    return _WardrobeTile(
+                      item: null,
+                      label: 'None',
+                      description: 'Default look',
+                      fallbackEmoji: '✨',
+                      selected: _selectedAccessory == null,
+                      onTap: () => _selectAccessory(null),
+                    );
+                  }
 
-                  return GestureDetector(
-                    onTap: () => _selectAccessory(option.id),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? AppTheme.buttonFill
-                            : AppTheme.backgroundPink,
-                        border: Border.all(
-                          color: selected
-                              ? AppTheme.borderDark
-                              : AppTheme.buttonShadow,
-                          width: selected ? 2 : 1,
-                        ),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 10,
-                        horizontal: 8,
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            option.emoji,
-                            style: const TextStyle(fontSize: 26),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            option.label,
-                            style: AppTheme.pixelText(
-                              fontSize: 13,
-                              color: AppTheme.textDark,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            option.description,
-                            style: AppTheme.pixelText(
-                              fontSize: 10,
-                              color: AppTheme.textDark,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
+                  final item = ownedItems[index - 1];
+                  return _WardrobeTile(
+                    item: item,
+                    label: item.label,
+                    description: item.description,
+                    selected: _selectedAccessory == item.id,
+                    onTap: () => _selectAccessory(item.id),
                   );
                 },
               ),
@@ -181,16 +128,59 @@ class _WardrobePageState extends State<WardrobePage> {
   }
 }
 
-class _AccessoryOption {
-  final String? id;
+class _WardrobeTile extends StatelessWidget {
+  final AccessoryItem? item;
   final String label;
-  final String emoji;
   final String description;
+  final String? fallbackEmoji;
+  final bool selected;
+  final VoidCallback onTap;
 
-  const _AccessoryOption({
-    required this.id,
+  const _WardrobeTile({
+    required this.item,
     required this.label,
-    required this.emoji,
     required this.description,
+    this.fallbackEmoji,
+    required this.selected,
+    required this.onTap,
   });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: selected ? AppTheme.buttonFill : AppTheme.backgroundPink,
+          border: Border.all(
+            color: selected ? AppTheme.borderDark : AppTheme.buttonShadow,
+            width: selected ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (item != null)
+              AccessoryGraphic(item: item, size: 32)
+            else
+              Text(fallbackEmoji ?? '✨', style: const TextStyle(fontSize: 26)),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: AppTheme.pixelText(fontSize: 13, color: AppTheme.textDark),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 3),
+            Text(
+              description,
+              style: AppTheme.pixelText(fontSize: 10, color: AppTheme.textDark),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

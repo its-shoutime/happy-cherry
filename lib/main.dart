@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:pixel_ui/pixel_ui.dart';
 
 import 'app_theme.dart';
 import 'audio_manager.dart';
@@ -11,12 +12,14 @@ import 'death.dart';
 import 'firebase_options.dart';
 import 'game.dart';
 import 'game_state.dart';
+import 'hatch_screen.dart';
 import 'info_button.dart';
 import 'loading_screen.dart';
 import 'login.dart';
 import 'models/pet.dart';
 import 'pet_animation.dart';
 import 'rename_button.dart';
+import 'shop_page.dart';
 import 'time_tracker.dart';
 import 'user_input.dart';
 import 'wardrobe_page.dart';
@@ -55,11 +58,16 @@ class _AppInitializerState extends State<AppInitializer> {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    FirebaseFirestore.instance.settings = const Settings(
-      persistenceEnabled: true,
-      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
-    );
-    await FirebaseFirestore.instance.enableNetwork();
+    try {
+      FirebaseFirestore.instance.settings = const Settings(
+        persistenceEnabled: true,
+        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+      );
+      await FirebaseFirestore.instance.enableNetwork();
+    } catch (error, stackTrace) {
+      // Don't block startup if persistence settings fail on a given platform.
+      debugPrint('Firestore setup warning: $error\n$stackTrace');
+    }
     await AudioManager.instance.init();
   }
 
@@ -131,7 +139,11 @@ class _HomePageState extends State<HomePage> {
   late Pet pet;
   late PetTimeTracker timeTracker;
   int coins = 0;
+  Set<String> ownedAccessories = {};
   bool _isLoading = true;
+  bool _loadFailed = false;
+  String _loadErrorMessage = '';
+  bool _isHatching = false;
   bool _isDead = false;
   bool _showFood = false;
   bool _showStars = false;
@@ -147,27 +159,122 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadGame() async {
-    final loaded = await GameState.loadPet(userId: widget.userId);
-    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _loadFailed = false;
+      _loadErrorMessage = '';
+    });
 
+    try {
+      // Warm the auth token if possible, but never block gameplay on it.
+      try {
+        await FirebaseAuth.instance.currentUser?.getIdToken();
+      } catch (error) {
+        debugPrint('Auth token warm-up failed: $error');
+      }
+
+      final loaded = await GameState.loadPet(userId: widget.userId);
+      if (!mounted) return;
+
+      timeTracker.stop();
+      setState(() {
+        if (loaded != null) {
+          pet = loaded.pet;
+          coins = loaded.coins;
+          ownedAccessories = {...loaded.ownedAccessories};
+          timeTracker = PetTimeTracker(
+            pet: pet,
+            onTick: _onTick,
+            onDeath: _onDeath,
+          );
+          timeTracker.start();
+          _isHatching = false;
+        } else {
+          // Brand-new account (or no reachable save): hatch a baby.
+          pet = Pet(name: "Mochi");
+          ownedAccessories = {};
+          timeTracker = PetTimeTracker(
+            pet: pet,
+            onTick: _onTick,
+            onDeath: _onDeath,
+          );
+          _isHatching = true;
+        }
+        _isLoading = false;
+        _loadFailed = false;
+        _loadErrorMessage = '';
+      });
+    } catch (error, stackTrace) {
+      debugPrint('Failed to load progress: $error\n$stackTrace');
+      if (!mounted) return;
+      timeTracker.stop();
+      setState(() {
+        _isLoading = false;
+        _loadFailed = true;
+        _isHatching = false;
+        _loadErrorMessage = _describeLoadError(error);
+      });
+    }
+  }
+
+  String _describeLoadError(Object error) {
+    final text = error.toString();
+    if (text.contains('permission-denied')) {
+      return 'Cloud save permission was denied. Check Firestore rules, then retry.';
+    }
+    if (text.contains('unavailable') || text.contains('failed-precondition')) {
+      return 'Cloud save is offline or unavailable right now.';
+    }
+    if (text.contains('network')) {
+      return 'Network error while loading your cloud save.';
+    }
+    return 'Could not reach your cloud save.';
+  }
+
+  Future<void> _backFromLoadFailure() async {
+    AudioManager.instance.playButton();
+    timeTracker.stop();
+    await widget.onLogout();
+  }
+
+  void _beginNewBaby({required String name}) {
     timeTracker.stop();
     setState(() {
-      if (loaded != null) {
-        pet = loaded.pet;
-        coins = loaded.coins;
-      }
+      // Keep account coins + owned clothing; new baby starts unequipped.
+      pet = Pet(name: name);
+      _isDead = false;
+      _showFood = false;
+      _showStars = false;
+      _isHatching = true;
+      timeTracker = PetTimeTracker(
+        pet: pet,
+        onTick: _onTick,
+        onDeath: _onDeath,
+      );
+    });
+  }
+
+  void _onHatchComplete() {
+    if (!mounted) return;
+    setState(() {
+      _isHatching = false;
       timeTracker = PetTimeTracker(
         pet: pet,
         onTick: _onTick,
         onDeath: _onDeath,
       );
       timeTracker.start();
-      _isLoading = false;
     });
+    unawaited(_saveProgress());
   }
 
   Future<void> _saveProgress() {
-    return GameState.savePet(pet, coins: coins, userId: widget.userId);
+    return GameState.savePet(
+      pet,
+      coins: coins,
+      ownedAccessories: ownedAccessories.toList()..sort(),
+      userId: widget.userId,
+    );
   }
 
   Future<void> _logout() async {
@@ -180,6 +287,29 @@ class _HomePageState extends State<HomePage> {
     await widget.onLogout();
   }
 
+  Future<void> _openShop() async {
+    if (!mounted) return;
+    await AudioManager.instance.playButton();
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ShopPage(
+          pet: pet,
+          coins: coins,
+          ownedAccessories: ownedAccessories,
+          onCoinsChanged: (value) {
+            setState(() => coins = value);
+            unawaited(_saveProgress());
+          },
+          onOwnedChanged: (owned) {
+            setState(() => ownedAccessories = {...owned});
+            unawaited(_saveProgress());
+          },
+        ),
+      ),
+    );
+  }
+
   Future<void> _openWardrobe() async {
     if (!mounted) return;
     await AudioManager.instance.playButton();
@@ -188,6 +318,7 @@ class _HomePageState extends State<HomePage> {
       MaterialPageRoute(
         builder: (_) => WardrobePage(
           pet: pet,
+          ownedAccessories: ownedAccessories,
           onAccessorySelected: (accessory) {
             setState(() {
               pet.accessory = accessory;
@@ -216,39 +347,13 @@ class _HomePageState extends State<HomePage> {
 
   void _restartFromDeath() {
     AudioManager.instance.playButton();
-    timeTracker.stop();
-    setState(() {
-      pet = Pet(name: "Mochi");
-      _isDead = false;
-      timeTracker = PetTimeTracker(
-        pet: pet,
-        onTick: _onTick,
-        onDeath: _onDeath,
-      );
-      timeTracker.start();
-    });
-    _saveProgress();
+    _beginNewBaby(name: 'Mochi');
     AudioManager.instance.playBgm();
   }
 
   void _abandonPet() {
     AudioManager.instance.playButton();
-    final petName = pet.name;
-    timeTracker.stop();
-    setState(() {
-      pet = Pet(name: petName);
-      _isDead = false;
-      _showFood = false;
-      _showStars = false;
-      timeTracker = PetTimeTracker(
-        pet: pet,
-        onTick: _onTick,
-        onDeath: _onDeath,
-      );
-      timeTracker.start();
-    });
-    // Keep account coins when replacing the pet.
-    _saveProgress();
+    _beginNewBaby(name: pet.name);
   }
 
   void _onTick() {
@@ -408,6 +513,97 @@ class _HomePageState extends State<HomePage> {
     if (_isLoading) {
       return const LoadingScreen();
     }
+    if (_loadFailed) {
+      return Scaffold(
+        backgroundColor: AppTheme.backgroundPink,
+        appBar: AppBar(
+          backgroundColor: AppTheme.appBarPink,
+          foregroundColor: AppTheme.textDark,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Back to login',
+            onPressed: () => unawaited(_backFromLoadFailure()),
+          ),
+          title: Text(
+            'Load failed',
+            style: AppTheme.pixelText(fontSize: 18, color: AppTheme.textDark),
+          ),
+        ),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Could not load your progress.',
+                    textAlign: TextAlign.center,
+                    style: AppTheme.pixelText(
+                      fontSize: 20,
+                      color: AppTheme.textDark,
+                    ).copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _loadErrorMessage.isEmpty
+                        ? 'Check your connection and try again.'
+                        : _loadErrorMessage,
+                    textAlign: TextAlign.center,
+                    style: AppTheme.pixelText(
+                      fontSize: 14,
+                      color: AppTheme.textDark,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Your cloud save was not overwritten.\n'
+                    'Retry again, or go back to login.',
+                    textAlign: TextAlign.center,
+                    style: AppTheme.pixelText(
+                      fontSize: 12,
+                      color: AppTheme.textDark,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  PixelButton(
+                    logicalWidth: 36,
+                    logicalHeight: 12,
+                    width: 180,
+                    pressChildOffset: const Offset(0, 1),
+                    onPressed: () {
+                      AudioManager.instance.playButton();
+                      unawaited(_loadGame());
+                    },
+                    semanticsLabel: 'Retry',
+                    child: Text(
+                      'Retry',
+                      style: AppTheme.buttonLabel(AppTheme.textDark),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  PixelButton(
+                    logicalWidth: 36,
+                    logicalHeight: 12,
+                    width: 180,
+                    pressChildOffset: const Offset(0, 1),
+                    onPressed: () => unawaited(_backFromLoadFailure()),
+                    semanticsLabel: 'Back to login',
+                    child: Text(
+                      'Back',
+                      style: AppTheme.buttonLabel(AppTheme.textDark),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    if (_isHatching) {
+      return HatchScreen(onComplete: _onHatchComplete);
+    }
     if (_isDead) {
       return DeathScreen(onRestart: _restartFromDeath);
     }
@@ -477,91 +673,35 @@ class _HomePageState extends State<HomePage> {
 
                 const SizedBox(height: 18),
 
-                Center(
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(14),
-                      onTap: _openWardrobe,
-                      child: Container(
-                        width: 220,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          color: AppTheme.buttonFill,
-                          border: Border.all(
-                            color: AppTheme.borderDark,
-                            width: 1,
-                          ),
-                          borderRadius: BorderRadius.circular(14),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x40000000),
-                              offset: Offset(2, 2),
-                              blurRadius: 0,
-                            ),
-                          ],
-                        ),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Positioned(
-                              top: 8,
-                              left: 20,
-                              right: 20,
-                              child: Container(
-                                height: 12,
-                                decoration: BoxDecoration(
-                                  color: AppTheme.appBarPink,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              left: 44,
-                              top: 24,
-                              child: Container(
-                                width: 10,
-                                height: 18,
-                                decoration: BoxDecoration(
-                                  color: AppTheme.borderDark,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              right: 44,
-                              top: 24,
-                              child: Container(
-                                width: 10,
-                                height: 18,
-                                decoration: BoxDecoration(
-                                  color: AppTheme.borderDark,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                              ),
-                            ),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.checkroom,
-                                  size: 22,
-                                  color: AppTheme.textDark,
-                                ),
-                                const SizedBox(width: 10),
-                                Text(
-                                  'Shop',
-                                  style: AppTheme.buttonLabel(
-                                    AppTheme.textDark,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    PixelButton(
+                      logicalWidth: 28,
+                      logicalHeight: 12,
+                      width: 140,
+                      pressChildOffset: const Offset(0, 1),
+                      onPressed: _openShop,
+                      semanticsLabel: 'Shop',
+                      child: Text(
+                        'Shop',
+                        style: AppTheme.buttonLabel(AppTheme.textDark),
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    PixelButton(
+                      logicalWidth: 28,
+                      logicalHeight: 12,
+                      width: 140,
+                      pressChildOffset: const Offset(0, 1),
+                      onPressed: _openWardrobe,
+                      semanticsLabel: 'Wardrobe',
+                      child: Text(
+                        'Wardrobe',
+                        style: AppTheme.buttonLabel(AppTheme.textDark),
+                      ),
+                    ),
+                  ],
                 ),
 
                 const SizedBox(height: 18),
@@ -591,7 +731,7 @@ class _HomePageState extends State<HomePage> {
                     AudioManager.instance.playButton();
                     final score = await Navigator.of(context).push<int>(
                       MaterialPageRoute(
-                        builder: (_) => const CherryCatchGame(),
+                        builder: (_) => CherryCatchGame(userId: widget.userId),
                       ),
                     );
 

@@ -6,13 +6,38 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'models/accessories.dart';
 import 'models/pet.dart';
+
+typedef StoredSave = ({
+  Pet pet,
+  int coins,
+  List<String> ownedAccessories,
+  DateTime savedAt,
+});
+
+typedef LoadedSave = ({Pet pet, int coins, List<String> ownedAccessories});
 
 class GameState {
   static const String _defaultPetKey = 'pet_save';
 
   /// Serializes saves so an older in-flight write cannot overwrite a newer one.
   static Future<void> _saveChain = Future<void>.value();
+
+  /// Test-only hooks so progress tests can exercise remote merge without Firebase.
+  @visibleForTesting
+  static Future<StoredSave?> Function(String userId)? debugLoadRemoteOverride;
+
+  @visibleForTesting
+  static Future<void> Function(String userId, Map<String, dynamic> data)?
+  debugSaveRemoteOverride;
+
+  @visibleForTesting
+  static void debugResetForTest() {
+    _saveChain = Future<void>.value();
+    debugLoadRemoteOverride = null;
+    debugSaveRemoteOverride = null;
+  }
 
   static String _petKey([String? userId]) {
     if (userId == null || userId.isEmpty) {
@@ -72,27 +97,55 @@ class GameState {
     return (petJson['xp'] as num?)?.toInt() ?? 0;
   }
 
-  static ({Pet pet, int coins, DateTime savedAt})? _decodeStoredSave(
+  static List<String> _readOwnedAccessories(
     Map<String, dynamic> decoded,
+    Pet pet,
   ) {
+    final owned = <String>{};
+    final raw = decoded['ownedAccessories'];
+    if (raw is List) {
+      for (final item in raw) {
+        if (item is String && item.isNotEmpty) {
+          owned.add(item);
+        }
+      }
+    }
+    // Migrate: anything already equipped counts as owned.
+    final equipped = pet.accessory;
+    if (equipped != null && equipped.isNotEmpty) {
+      owned.add(equipped);
+    }
+    // Normalize legacy ids (e.g. hat → straw_hat) for newer catalogs.
+    return AccessoryCatalog.canonicalizeOwned(owned);
+  }
+
+  static StoredSave? _decodeStoredSave(Map<String, dynamic> decoded) {
     try {
       final petJson = _readPetJson(decoded);
       if (petJson == null) return null;
 
       final pet = Pet.fromJson(petJson);
       final coins = _readCoins(decoded, petJson);
+      final ownedAccessories = _readOwnedAccessories(decoded, pet);
+      // Keep equipped accessory aligned with the canonical owned id.
+      if (pet.accessory != null && pet.accessory!.isNotEmpty) {
+        pet.accessory = AccessoryCatalog.canonicalizeId(pet.accessory!);
+      }
       final savedAt =
           _parseSavedAt(decoded['savedAt'] as String?) ?? DateTime.now();
-      return (pet: pet, coins: coins, savedAt: savedAt);
+      return (
+        pet: pet,
+        coins: coins,
+        ownedAccessories: ownedAccessories,
+        savedAt: savedAt,
+      );
     } catch (error, stackTrace) {
       debugPrint('Failed to decode pet save: $error\n$stackTrace');
       return null;
     }
   }
 
-  static Future<({Pet pet, int coins, DateTime savedAt})?> _loadLocalSave(
-    String? userId,
-  ) async {
+  static Future<StoredSave?> _loadLocalSave(String? userId) async {
     final prefs = await SharedPreferences.getInstance();
     final petJson = prefs.getString(_petKey(userId));
     if (petJson == null) return null;
@@ -106,9 +159,17 @@ class GameState {
     }
   }
 
-  static Future<({Pet pet, int coins, DateTime savedAt})?> _loadRemoteSave(
-    String userId,
-  ) async {
+  static Future<StoredSave?> _loadRemoteSave(String userId) async {
+    final override = debugLoadRemoteOverride;
+    if (override != null) {
+      try {
+        return await override(userId);
+      } catch (error, stackTrace) {
+        debugPrint('Remote load override failed: $error\n$stackTrace');
+        return null;
+      }
+    }
+
     try {
       final document = await FirebaseFirestore.instance
           .collection('users')
@@ -120,23 +181,16 @@ class GameState {
       if (data == null) return null;
 
       return _decodeStoredSave(Map<String, dynamic>.from(data));
-    } on FirebaseException catch (error, stackTrace) {
-      if (error.code == 'unavailable' || error.code == 'failed-precondition') {
-        debugPrint('Firestore offline, using cached save: $error\n$stackTrace');
-        return null;
-      }
-      debugPrint('Unexpected Firestore error: $error\n$stackTrace');
-      rethrow;
     } catch (error, stackTrace) {
-      debugPrint('Failed to load remote save: $error\n$stackTrace');
-      rethrow;
+      // Treat unreachable/denied cloud as "no remote save" so new accounts and
+      // wiped local caches can still enter the game. Local cache still wins
+      // when present (see loadPet).
+      debugPrint('Firestore remote load failed: $error\n$stackTrace');
+      return null;
     }
   }
 
-  static ({Pet pet, int coins, DateTime savedAt})? _pickNewestSave(
-    ({Pet pet, int coins, DateTime savedAt})? local,
-    ({Pet pet, int coins, DateTime savedAt})? remote,
-  ) {
+  static StoredSave? _pickNewestSave(StoredSave? local, StoredSave? remote) {
     if (local == null) return remote;
     if (remote == null) return local;
     // Prefer local on a tie so same-device lights/settings win.
@@ -153,11 +207,13 @@ class GameState {
   static Map<String, dynamic> _savePayload(
     Pet pet,
     int coins,
+    List<String> ownedAccessories,
     DateTime savedAt,
   ) {
     return {
       'pet': pet.toJson(),
       'coins': coins,
+      'ownedAccessories': ownedAccessories,
       'savedAt': savedAt.toIso8601String(),
     };
   }
@@ -166,6 +222,7 @@ class GameState {
     String? userId,
     Pet pet,
     int coins,
+    List<String> ownedAccessories,
     DateTime savedAt,
   ) async {
     final prefs = await SharedPreferences.getInstance();
@@ -183,126 +240,177 @@ class GameState {
       } catch (_) {}
     }
 
-    await prefs.setString(key, jsonEncode(_savePayload(pet, coins, savedAt)));
+    await prefs.setString(
+      key,
+      jsonEncode(_savePayload(pet, coins, ownedAccessories, savedAt)),
+    );
   }
 
-  static Future<({Pet pet, int coins})?> loadCachedPet({String? userId}) async {
+  static Future<LoadedSave?> loadCachedPet({String? userId}) async {
     final stored = await _loadLocalSave(userId);
     if (stored == null) return null;
 
     _advancePetToNow(stored.pet, stored.savedAt);
-    return (pet: stored.pet, coins: stored.coins);
+    return (
+      pet: stored.pet,
+      coins: stored.coins,
+      ownedAccessories: stored.ownedAccessories,
+    );
   }
 
   static Pet _copyPet(Pet pet) => Pet.fromJson(pet.toJson());
 
-  static Future<({Pet pet, int coins})?> loadPet({
+  static Future<LoadedSave?> loadPet({
     String? userId,
-    void Function(Pet pet, int coins)? onLocalReady,
+    void Function(Pet pet, int coins, List<String> ownedAccessories)?
+    onLocalReady,
   }) async {
     if (userId == null || userId.isEmpty) {
       return loadCachedPet(userId: userId);
     }
 
     final localFuture = _loadLocalSave(userId);
-    final remoteFuture = _loadRemoteSave(userId);
+    // Capture remote errors immediately so a fast failure cannot become an
+    // unhandled async error while local is still loading.
+    final remoteFuture = _loadRemoteSave(userId).then<StoredSave?>(
+      (value) => value,
+      onError: (Object error, StackTrace stackTrace) {
+        debugPrint(
+          'Remote load failed, using cache if any: $error\n$stackTrace',
+        );
+        return null;
+      },
+    );
 
     final local = await localFuture;
     Pet? previewPet;
     int? previewCoins;
+    List<String>? previewOwned;
     if (local != null && onLocalReady != null) {
       previewPet = _copyPet(local.pet);
       previewCoins = local.coins;
+      previewOwned = List<String>.from(local.ownedAccessories);
       _advancePetToNow(previewPet, local.savedAt);
-      onLocalReady(previewPet, previewCoins);
+      onLocalReady(previewPet, previewCoins, previewOwned);
     }
 
-    ({Pet pet, int coins, DateTime savedAt})? remote;
-    try {
-      remote = await remoteFuture;
-    } on FirebaseException catch (error, stackTrace) {
-      if (error.code == 'unavailable' || error.code == 'failed-precondition') {
-        debugPrint(
-          'Remote load failed due to offline mode: $error\n$stackTrace',
-        );
-        remote = null;
-      } else {
-        rethrow;
-      }
-    }
+    final remote = await remoteFuture;
 
     final stored = _pickNewestSave(local, remote);
     if (stored == null) {
-      if (previewPet == null || previewCoins == null) return null;
-      return (pet: previewPet, coins: previewCoins);
+      if (previewPet == null || previewCoins == null || previewOwned == null) {
+        // No local and no remote → brand-new account (or cloud unreachable).
+        return null;
+      }
+      return (
+        pet: previewPet,
+        coins: previewCoins,
+        ownedAccessories: previewOwned,
+      );
     }
 
     final Pet resultPet;
     final int resultCoins;
+    final List<String> resultOwned;
     if (previewPet != null && identical(stored, local)) {
       resultPet = previewPet;
       resultCoins = previewCoins!;
+      resultOwned = previewOwned!;
     } else {
       resultPet = stored.pet;
       resultCoins = stored.coins;
+      resultOwned = stored.ownedAccessories;
       _advancePetToNow(resultPet, stored.savedAt);
     }
 
     final syncedAt = DateTime.now();
-    unawaited(_cacheSave(userId, resultPet, resultCoins, syncedAt));
+    unawaited(
+      _cacheSave(userId, resultPet, resultCoins, resultOwned, syncedAt),
+    );
 
     if (remote != null && identical(stored, local)) {
-      unawaited(
-        FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .set(_savePayload(resultPet, resultCoins, syncedAt))
-            .catchError((Object error, StackTrace stackTrace) {
-              debugPrint('Failed to sync remote save: $error\n$stackTrace');
-            }),
+      final payload = _savePayload(
+        resultPet,
+        resultCoins,
+        resultOwned,
+        syncedAt,
       );
+      final saveRemote = debugSaveRemoteOverride;
+      if (saveRemote != null) {
+        unawaited(
+          saveRemote(userId, payload).catchError((
+            Object error,
+            StackTrace stackTrace,
+          ) {
+            debugPrint('Failed to sync remote save: $error\n$stackTrace');
+          }),
+        );
+      } else {
+        unawaited(
+          FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .set(payload)
+              .catchError((Object error, StackTrace stackTrace) {
+                debugPrint('Failed to sync remote save: $error\n$stackTrace');
+              }),
+        );
+      }
     }
 
-    return (pet: resultPet, coins: resultCoins);
+    return (
+      pet: resultPet,
+      coins: resultCoins,
+      ownedAccessories: resultOwned,
+    );
   }
 
-  static Future<void> savePet(Pet pet, {required int coins, String? userId}) {
+  static Future<void> savePet(
+    Pet pet, {
+    required int coins,
+    List<String> ownedAccessories = const [],
+    String? userId,
+  }) {
     // Snapshot state now; run after prior saves so order is preserved.
     final petSnapshot = Pet.fromJson(pet.toJson());
     final coinsSnapshot = coins;
+    final ownedSnapshot = List<String>.from(ownedAccessories);
     final savedAt = DateTime.now();
 
     final save = _saveChain.then((_) async {
-      final saveData = _savePayload(petSnapshot, coinsSnapshot, savedAt);
+      final saveData = _savePayload(
+        petSnapshot,
+        coinsSnapshot,
+        ownedSnapshot,
+        savedAt,
+      );
 
-      await _cacheSave(userId, petSnapshot, coinsSnapshot, savedAt);
+      await _cacheSave(
+        userId,
+        petSnapshot,
+        coinsSnapshot,
+        ownedSnapshot,
+        savedAt,
+      );
 
       if (userId == null || userId.isEmpty) {
         return;
       }
 
       try {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .set(saveData)
-            .timeout(const Duration(seconds: 8));
+        final saveRemote = debugSaveRemoteOverride;
+        if (saveRemote != null) {
+          await saveRemote(userId, saveData);
+        } else {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .set(saveData)
+              .timeout(const Duration(seconds: 8));
+        }
       } catch (error, stackTrace) {
+        // Local cache already succeeded; do not fail the save Future.
         debugPrint('Failed to save remote progress: $error\n$stackTrace');
-            .set(saveData)
-    .timeout(const Duration(seconds: 8));
-} on FirebaseException catch (error, stackTrace) {
-  if (error.code == 'unavailable' || 
-      error.code == 'failed-precondition') {
-    debugPrint('Save queued offline, will sync when online: $error');
-  } else {
-    debugPrint('Failed to save remote progress: $error\n$stackTrace');
-    rethrow;
-  }
-} catch (error, stackTrace) {
-  // Catch-all for non-Firebase errors or timeout exceptions
-  debugPrint('Failed to save remote progress: $error\n$stackTrace');
-}
       }
     });
 
@@ -353,6 +461,11 @@ class GameState {
       return;
     }
 
+    // In tests, remote I/O is overridden — skip live Firestore deletes.
+    if (debugSaveRemoteOverride != null) {
+      return;
+    }
+
     try {
       await FirebaseFirestore.instance.collection('users').doc(userId).delete();
     } catch (error, stackTrace) {
@@ -363,5 +476,29 @@ class GameState {
   static Future<void> clearLastLoggedInUser() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_lastLoggedInUserKey);
+  }
+
+  static String _cherryHighScoreKey([String? userId]) {
+    if (userId == null || userId.isEmpty) {
+      return 'cherry_catch_high_score';
+    }
+    return 'cherry_catch_high_score_${userId.toLowerCase()}';
+  }
+
+  static Future<int> loadCherryHighScore({String? userId}) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_cherryHighScoreKey(userId)) ?? 0;
+  }
+
+  /// Persists [score] when it beats the stored personal best. Returns the best.
+  static Future<int> recordCherryHighScore(int score, {String? userId}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = _cherryHighScoreKey(userId);
+    final current = prefs.getInt(key) ?? 0;
+    if (score > current) {
+      await prefs.setInt(key, score);
+      return score;
+    }
+    return current;
   }
 }

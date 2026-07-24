@@ -64,14 +64,17 @@ flutter:
 
   assets:
     - assets/audio/
+    - assets/accessories/
     - assets/pets/angel/
     - assets/pets/bear/
     - assets/pets/blob/
     - assets/pets/cherry/
     - assets/pets/demon/
+    - assets/pets/egg/
     - assets/pets/flower/
     - assets/pets/lloyd/
     - assets/pets/mousse/
+    - assets/minigame/
     - assets/pets/puffaloo/
     - assets/pets/sprout/
     - assets/pets/squeaky/
