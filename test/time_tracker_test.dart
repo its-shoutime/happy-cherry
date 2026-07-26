@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:happy_cherry/models/pet.dart';
-import 'package:happy_cherry/models/pet_types.dart';
-import 'package:happy_cherry/time_tracker.dart';
+import 'package:happy_cherry/core/pet.dart';
+import 'package:happy_cherry/core/pet_types.dart';
+import 'package:happy_cherry/core/time_tracker.dart';
 
 void main() {
   group('PetTimeTracker', () {
