@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:happy_cherry/app_theme.dart';
-import 'package:happy_cherry/hatch_screen.dart';
+import 'package:happy_cherry/app/app_theme.dart';
+import 'package:happy_cherry/features/hatch/hatch_screen.dart';
 
 void main() {
   testWidgets('HatchScreen shows hatching copy and completes after duration', (

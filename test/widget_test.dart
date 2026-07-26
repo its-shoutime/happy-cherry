@@ -1,8 +1,8 @@
 // Login UI smoke test — avoids Firebase by pumping LoginPage directly.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:happy_cherry/app_theme.dart';
-import 'package:happy_cherry/login.dart';
+import 'package:happy_cherry/app/app_theme.dart';
+import 'package:happy_cherry/features/auth/login.dart';
 
 void main() {
   testWidgets('Login page shows owner login controls', (WidgetTester tester) async {

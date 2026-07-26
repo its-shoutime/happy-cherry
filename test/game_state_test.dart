@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:happy_cherry/game_state.dart';
-import 'package:happy_cherry/models/pet.dart';
-import 'package:happy_cherry/models/pet_types.dart';
+import 'package:happy_cherry/data/game_state.dart';
+import 'package:happy_cherry/core/pet.dart';
+import 'package:happy_cherry/core/pet_types.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

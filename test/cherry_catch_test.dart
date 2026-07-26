@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:happy_cherry/cherry_catch_logic.dart';
+import 'package:happy_cherry/core/cherry_catch_logic.dart';
 
 void main() {
   group('CherryCatchLogic', () {
