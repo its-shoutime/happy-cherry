@@ -2,19 +2,15 @@ import 'dart:async' show unawaited;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-
 import 'package:happy_cherry/app/audio_manager.dart';
 import 'package:happy_cherry/core/cherry_catch_logic.dart';
-import 'package:happy_cherry/data/game_state.dart';
 import 'package:happy_cherry/core/pet.dart';
 import 'package:happy_cherry/core/time_tracker.dart';
+import 'package:happy_cherry/data/game_state.dart';
 
 /// Session / load / save / tick / death for the home screen (SRP).
 class HomeController extends ChangeNotifier {
-  HomeController({
-    required this.userId,
-    required this.onLogout,
-  }) {
+  HomeController({required this.userId, required this.onLogout}) {
     pet = Pet(name: 'Mochi');
     timeTracker = PetTimeTracker(pet: pet, onTick: onTick, onDeath: onDeath);
   }
@@ -60,10 +56,16 @@ class HomeController extends ChangeNotifier {
       }
 
       final loaded = await GameState.loadPet(userId: userId);
+      final fallbackName = await GameState.loadPetName(userId: userId);
 
       timeTracker.stop();
       if (loaded != null) {
         pet = loaded.pet;
+        if ((pet.name.isEmpty || pet.name == 'Mochi') &&
+            fallbackName != null &&
+            fallbackName.isNotEmpty) {
+          pet.name = fallbackName;
+        }
         coins = loaded.coins;
         ownedAccessories = {...loaded.ownedAccessories};
         timeTracker = PetTimeTracker(
@@ -185,10 +187,14 @@ class HomeController extends ChangeNotifier {
     unawaited(saveProgress());
   }
 
-  void rename(String newName) {
-    pet.name = newName;
+  Future<void> rename(String newName) async {
+    final trimmed = newName.trim();
+    if (trimmed.isEmpty || trimmed == pet.name) return;
+
+    pet.name = trimmed;
     notifyListeners();
-    unawaited(saveProgress());
+    await saveProgress();
+    await GameState.savePetName(trimmed, userId: userId);
   }
 
   void setAccessory(String? accessory) {
@@ -197,10 +203,7 @@ class HomeController extends ChangeNotifier {
     unawaited(saveProgress());
   }
 
-  void applyPurchase({
-    required int newCoins,
-    required Set<String> owned,
-  }) {
+  void applyPurchase({required int newCoins, required Set<String> owned}) {
     coins = newCoins;
     ownedAccessories = {...owned};
     notifyListeners();
@@ -250,6 +253,24 @@ class HomeController extends ChangeNotifier {
         notifyListeners();
       });
     }
+  }
+
+  void onCherrySaysFinished(int happinessReward) {
+    AudioManager.instance.playBgm();
+    if (happinessReward <= 0) return;
+
+    coins += happinessReward;
+    AudioManager.instance.playCoin();
+
+    pet.happiness = (pet.happiness + happinessReward).clamp(0.0, Pet.maxStat);
+    showStars = true;
+    notifyListeners();
+    unawaited(saveProgress());
+
+    Future.delayed(const Duration(seconds: 2), () {
+      showStars = false;
+      notifyListeners();
+    });
   }
 
   void onClean() {

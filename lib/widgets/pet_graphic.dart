@@ -1,15 +1,15 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-
-import 'package:happy_cherry/widgets/accessory_graphic.dart';
 import 'package:happy_cherry/core/pet.dart';
+import 'package:happy_cherry/widgets/accessory_graphic.dart';
 
 class PetGraphic extends StatelessWidget {
   final Pet pet;
   final double height;
   final bool showFood;
   final bool showStars;
+
   /// Optional preview override so callers need not clone the pet (LoD).
   final String? accessoryOverride;
 
@@ -71,7 +71,7 @@ class PetGraphic extends StatelessWidget {
 
               // stars effect when playing
               if (showStars)
-                for (var i = 0; i < 6; i++)
+                for (var i = 0; i < 15; i++)
                   Positioned(
                     left:
                         rand.nextDouble() * max(0.0, maxWidth - (height * 0.1)),
@@ -87,20 +87,36 @@ class PetGraphic extends StatelessWidget {
                   ),
 
               // Poop overlays scattered within the same vertical bounds as the pet image
-              // Food icon shown briefly when feeding
-              if (showFood)
+              // Food icons shown briefly when feeding:
+              // - a restaurant icon near the pet center-bottom so it looks like
+              //   the pet is eating
+              // - a hamburger icon to the pet's right
+              if (showFood) ...[
+                // centered restaurant plate/icon (appears at the pet's feet)
                 Positioned(
-                  left: max(
-                    0.0,
-                    min(maxWidth - height * 0.16, maxWidth * 0.55),
-                  ),
-                  top: max(0.0, min(height - height * 0.16, height * 0.45)),
+                  left: max(0.0, (maxWidth - height * 0.16) / 2),
+                  bottom: height * 0.04,
                   child: Icon(
                     Icons.restaurant,
                     color: Colors.orangeAccent,
                     size: height * 0.16,
                   ),
                 ),
+
+                // hamburger icon positioned to the right of the pet so it's "next to" it
+                Positioned(
+                  left: min(
+                    maxWidth - height * 0.16,
+                    maxWidth / 2 + height * 0.38,
+                  ),
+                  bottom: height * 0.06,
+                  child: Icon(
+                    Icons.fastfood,
+                    color: Colors.brown,
+                    size: height * 0.16,
+                  ),
+                ),
+              ],
 
               // poop positions clamped to available area
               for (var i = 0; i < pet.poopCount; i++)

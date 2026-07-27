@@ -195,8 +195,20 @@ class Pet {
     }
   }
 
-  static const int _poopIntervalSeconds = 4 * 60 * 60;
   static const int _sickAfterFullPoopSeconds = 4 * 60 * 60;
+
+  int get _poopIntervalSeconds {
+    switch (stage) {
+      case PetStage.baby:
+        return 40 * 60;
+      case PetStage.child:
+        return 120 * 60;
+      case PetStage.teen:
+        return 240 * 60;
+      case PetStage.adult:
+        return 480 * 60;
+    }
+  }
 
   void advancePoopTimer(Duration elapsed) {
     if (elapsed.isNegative) return;

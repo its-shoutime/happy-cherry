@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-
+import 'package:happy_cherry/core/pet.dart';
 import 'package:happy_cherry/data/auth_service.dart';
 import 'package:happy_cherry/data/high_score_store.dart';
 import 'package:happy_cherry/data/local_save_store.dart';
@@ -7,7 +7,7 @@ import 'package:happy_cherry/data/progress_codec.dart';
 import 'package:happy_cherry/data/remote_save_store.dart';
 import 'package:happy_cherry/data/save_models.dart';
 import 'package:happy_cherry/data/save_repository.dart';
-import 'package:happy_cherry/core/pet.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 export 'package:happy_cherry/data/save_models.dart';
 
@@ -28,8 +28,8 @@ class GameState {
 
   /// Test-only hooks so progress tests can exercise remote merge without Firebase.
   @visibleForTesting
-  static Future<StoredSave?> Function(String userId)? get debugLoadRemoteOverride =>
-      _loadOverride;
+  static Future<StoredSave?> Function(String userId)?
+  get debugLoadRemoteOverride => _loadOverride;
 
   @visibleForTesting
   static set debugLoadRemoteOverride(
@@ -78,6 +78,23 @@ class GameState {
 
   static Future<void> clearLastLoggedInUser() => _auth.clearLastLoggedInUser();
 
+  static String _petNameKey(String? userId) {
+    if (userId == null || userId.isEmpty) {
+      return 'pet_name';
+    }
+    return 'pet_name_${userId.toLowerCase()}';
+  }
+
+  static Future<void> savePetName(String name, {String? userId}) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_petNameKey(userId), name);
+  }
+
+  static Future<String?> loadPetName({String? userId}) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_petNameKey(userId));
+  }
+
   static Future<LoadedSave?> loadCachedPet({String? userId}) =>
       _repository.loadCached(userId: userId);
 
@@ -85,21 +102,19 @@ class GameState {
     String? userId,
     void Function(Pet pet, int coins, List<String> ownedAccessories)?
     onLocalReady,
-  }) =>
-      _repository.load(userId: userId, onLocalReady: onLocalReady);
+  }) => _repository.load(userId: userId, onLocalReady: onLocalReady);
 
   static Future<void> savePet(
     Pet pet, {
     required int coins,
     List<String> ownedAccessories = const [],
     String? userId,
-  }) =>
-      _repository.save(
-        pet,
-        coins: coins,
-        ownedAccessories: ownedAccessories,
-        userId: userId,
-      );
+  }) => _repository.save(
+    pet,
+    coins: coins,
+    ownedAccessories: ownedAccessories,
+    userId: userId,
+  );
 
   static Future<bool> loginUser(String username, String password) =>
       _auth.login(username, password);

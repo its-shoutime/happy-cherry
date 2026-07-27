@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import 'package:happy_cherry/app/app_theme.dart';
 import 'package:happy_cherry/core/pet.dart';
 
@@ -8,8 +7,7 @@ TextStyle homePixelBodyText(
   double fontSize, {
   FontWeight? fontWeight,
 }) {
-  final bodyTextColor =
-      pet.lightsOff ? AppTheme.textLight : AppTheme.textDark;
+  final bodyTextColor = pet.lightsOff ? AppTheme.textLight : AppTheme.textDark;
   return AppTheme.pixelText(
     fontSize: fontSize,
     color: bodyTextColor,
@@ -95,27 +93,7 @@ class AttentionIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lowHearts = pet.hunger <= 4 || pet.happiness <= 4;
-    final bodyTextColor =
-        pet.lightsOff ? AppTheme.textLight : AppTheme.textDark;
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        if (lowHearts) ...[
-          const Icon(Icons.notification_important, color: Colors.red, size: 30),
-          const SizedBox(width: 8),
-        ],
-        Text(
-          lowHearts ? 'Attention needed' : 'All good!',
-          style: homePixelBodyText(
-            pet,
-            16,
-            fontWeight: FontWeight.bold,
-          ).copyWith(color: lowHearts ? Colors.red : bodyTextColor),
-        ),
-      ],
-    );
+    return const SizedBox.shrink();
   }
 }
 
@@ -136,10 +114,7 @@ class LightsControl extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text('Lights', style: homePixelBodyText(pet, 16)),
-        Switch(
-          value: !pet.lightsOff,
-          onChanged: onLightsChanged,
-        ),
+        Switch(value: !pet.lightsOff, onChanged: onLightsChanged),
       ],
     );
   }

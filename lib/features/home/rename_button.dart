@@ -3,7 +3,7 @@ import 'package:happy_cherry/core/pet.dart';
 
 class RenameButton extends StatelessWidget {
   final Pet pet;
-  final ValueChanged<String> onRename;
+  final Future<void> Function(String) onRename;
 
   const RenameButton({super.key, required this.pet, required this.onRename});
 
@@ -29,7 +29,7 @@ class RenameButton extends StatelessWidget {
                 ),
                 ElevatedButton(
                   onPressed: () {
-                    Navigator.pop(context, controller.text);
+                    Navigator.pop(context, controller.text.trim());
                   },
                   child: const Text("Save"),
                 ),
@@ -38,7 +38,7 @@ class RenameButton extends StatelessWidget {
           },
         );
         if (result != null && result.isNotEmpty) {
-          onRename(result);
+          await onRename(result);
         }
         controller.dispose();
       },

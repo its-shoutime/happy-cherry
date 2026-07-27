@@ -19,7 +19,7 @@ class CherryCatchLogic {
   static const double missY = 650.0;
   static const double catchLeftPad = 30.0;
   static const double catchRightPad = 90.0;
-  static const int startingLives = 3;
+  static const int startingLives = 1;
   static const int playRewardScoreThreshold = 3;
 
   /// Extra cherry every N points, up to [maxActiveCherries].

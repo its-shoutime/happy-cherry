@@ -1,25 +1,25 @@
 import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
-import 'package:pixel_ui/pixel_ui.dart';
-
 import 'package:happy_cherry/app/app_theme.dart';
 import 'package:happy_cherry/app/audio_manager.dart';
-import 'package:happy_cherry/features/hatch/death.dart';
-import 'package:happy_cherry/features/cherry_catch/game.dart';
-import 'package:happy_cherry/features/hatch/hatch_screen.dart';
-import 'package:happy_cherry/features/home/info_button.dart';
 import 'package:happy_cherry/app/loading_screen.dart';
 import 'package:happy_cherry/core/pet.dart';
-import 'package:happy_cherry/widgets/pet_graphic.dart';
-import 'package:happy_cherry/features/home/rename_button.dart';
-import 'package:happy_cherry/features/shop/shop_page.dart';
-import 'package:happy_cherry/features/home/user_input.dart';
-import 'package:happy_cherry/features/wardrobe/wardrobe_page.dart';
-import 'package:happy_cherry/features/shop/shop_purchase_result.dart';
+import 'package:happy_cherry/features/cherry_catch/game.dart';
+import 'package:happy_cherry/features/cherry_says/game2.dart';
+import 'package:happy_cherry/features/hatch/death.dart';
+import 'package:happy_cherry/features/hatch/hatch_screen.dart';
 import 'package:happy_cherry/features/home/home_controller.dart';
+import 'package:happy_cherry/features/home/info_button.dart';
 import 'package:happy_cherry/features/home/load_failure_screen.dart';
 import 'package:happy_cherry/features/home/pet_hud.dart';
+import 'package:happy_cherry/features/home/rename_button.dart';
+import 'package:happy_cherry/features/home/user_input.dart';
+import 'package:happy_cherry/features/shop/shop_page.dart';
+import 'package:happy_cherry/features/shop/shop_purchase_result.dart';
+import 'package:happy_cherry/features/wardrobe/wardrobe_page.dart';
+import 'package:happy_cherry/widgets/pet_graphic.dart';
+import 'package:pixel_ui/pixel_ui.dart';
 
 class HomePage extends StatefulWidget {
   final String userId;
@@ -30,6 +30,8 @@ class HomePage extends StatefulWidget {
   @override
   State<HomePage> createState() => _HomePageState();
 }
+
+enum _GameChoice { cherryCatch, cherrySays }
 
 class _HomePageState extends State<HomePage> {
   late final HomeController _controller;
@@ -88,13 +90,62 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _onPlay() async {
     AudioManager.instance.playButton();
-    final score = await Navigator.of(context).push<int>(
-      MaterialPageRoute(
-        builder: (_) => CherryCatchGame(userId: widget.userId),
-      ),
+    final navigator = Navigator.of(context);
+
+    final selectedGame = await showDialog<_GameChoice?>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppTheme.backgroundPink,
+          title: Text(
+            'Choose a game',
+            style: AppTheme.pixelText(fontSize: 18, color: AppTheme.textDark),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, _GameChoice.cherryCatch),
+              child: Text(
+                'Cherry Catch',
+                style: AppTheme.pixelText(
+                  fontSize: 14,
+                  color: AppTheme.textDark,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, _GameChoice.cherrySays),
+              child: Text(
+                'Cherry Says',
+                style: AppTheme.pixelText(
+                  fontSize: 14,
+                  color: AppTheme.textDark,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (selectedGame == null || !mounted) return;
+
+    int? score;
+    if (selectedGame == _GameChoice.cherryCatch) {
+      score = await navigator.push<int>(
+        MaterialPageRoute(
+          builder: (_) => CherryCatchGame(userId: widget.userId),
+        ),
+      );
+      if (!mounted) return;
+      _controller.onPlayFinished(score);
+      return;
+    }
+
+    final happinessReward = await navigator.push<int>(
+      MaterialPageRoute(builder: (_) => const CherrySaysGame()),
     );
     if (!mounted) return;
-    _controller.onPlayFinished(score);
+    _controller.onCherrySaysFinished(happinessReward ?? 0);
   }
 
   @override
@@ -133,10 +184,7 @@ class _HomePageState extends State<HomePage> {
                   tooltip: c.muted ? 'Unmute' : 'Mute',
                   onPressed: () => unawaited(c.toggleMute()),
                 ),
-                RenameButton(
-                  pet: pet,
-                  onRename: c.rename,
-                ),
+                RenameButton(pet: pet, onRename: c.rename),
                 InfoButton(
                   pet: pet,
                   coins: c.coins,
@@ -150,15 +198,19 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             ),
-            backgroundColor:
-                pet.lightsOff ? Colors.black : AppTheme.backgroundPink,
+            backgroundColor: pet.lightsOff
+                ? Colors.black
+                : AppTheme.backgroundPink,
             body: Padding(
               padding: const EdgeInsets.all(24),
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 8),
+                    // Attention icon shown above the pet when low on care.
+                    AttentionIndicator(pet: pet),
+                    const SizedBox(height: 12),
                     Center(
                       child: PetGraphic(
                         pet: pet,
@@ -184,7 +236,6 @@ class _HomePageState extends State<HomePage> {
                       value: pet.happiness,
                       pet: pet,
                     ),
-                    AttentionIndicator(pet: pet),
                     const SizedBox(height: 16),
                     LightsControl(
                       pet: pet,

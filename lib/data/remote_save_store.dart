@@ -63,8 +63,7 @@ class RemoteSaveStore implements SaveStore {
     await FirebaseFirestore.instance
         .collection('users')
         .doc(userId)
-        .set(payload)
-        .timeout(const Duration(seconds: 8));
+        .set(payload);
   }
 
   @override
