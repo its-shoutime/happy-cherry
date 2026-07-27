@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -146,6 +147,46 @@ void main() {
       final loaded = await GameState.loadCachedPet();
       expect(loaded!.pet.name, 'Second');
       expect(loaded.coins, 2);
+    });
+
+    test('rename persists locally even when remote save is slow', () async {
+      final remoteStarted = Completer<void>();
+      final releaseRemote = Completer<void>();
+      var remoteWrites = 0;
+
+      GameState.debugSaveRemoteOverride = (userId, data) async {
+        remoteWrites += 1;
+        if (remoteWrites == 1) {
+          remoteStarted.complete();
+          await releaseRemote.future;
+        }
+      };
+
+      // Tick-style save that blocks the remote queue.
+      unawaited(
+        GameState.savePet(
+          makePet(name: 'Mochi'),
+          coins: 1,
+          userId: 'uid-rename',
+        ),
+      );
+      await remoteStarted.future;
+
+      // Rename must land on disk without waiting for Firestore.
+      await GameState.savePet(
+        makePet(name: 'Cherry'),
+        coins: 1,
+        userId: 'uid-rename',
+      );
+
+      final afterRename = await GameState.loadCachedPet(userId: 'uid-rename');
+      expect(afterRename!.pet.name, 'Cherry');
+
+      // Simulate logout → login while remote is still stuck.
+      final afterRelogin = await GameState.loadPet(userId: 'uid-rename');
+      expect(afterRelogin!.pet.name, 'Cherry');
+
+      releaseRemote.complete();
     });
 
     test('deleteSave removes only that user local progress', () async {
