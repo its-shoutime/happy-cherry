@@ -23,11 +23,16 @@ class SaveRepository {
   final SaveStore remoteStore;
   final ProgressCodec codec;
 
-  /// Serializes saves so an older in-flight write cannot overwrite a newer one.
-  Future<void> _saveChain = Future<void>.value();
+  /// Serializes local writes so an older in-flight write cannot overwrite a newer one.
+  Future<void> _localChain = Future<void>.value();
+
+  /// Serializes remote writes independently so Firestore latency cannot block
+  /// local persistence (rename/logout must land on disk quickly).
+  Future<void> _remoteChain = Future<void>.value();
 
   void resetSaveChain() {
-    _saveChain = Future<void>.value();
+    _localChain = Future<void>.value();
+    _remoteChain = Future<void>.value();
   }
 
   StoredSave? _pickNewestSave(StoredSave? local, StoredSave? remote) {
@@ -64,7 +69,38 @@ class SaveRepository {
     );
   }
 
+  Future<void> _enqueueLocal(
+    String? userId,
+    Pet pet,
+    int coins,
+    List<String> ownedAccessories,
+    DateTime savedAt,
+  ) {
+    final write = _localChain.then(
+      (_) => _writeLocal(userId, pet, coins, ownedAccessories, savedAt),
+    );
+    _localChain = write.catchError((Object error, StackTrace stackTrace) {
+      debugPrint('Local save queue error: $error\n$stackTrace');
+    });
+    return write;
+  }
+
+  Future<void> _enqueueRemote(String userId, Map<String, dynamic> payload) {
+    final write = _remoteChain.then((_) async {
+      try {
+        await remoteStore.saveRaw(userId, payload);
+      } catch (error, stackTrace) {
+        debugPrint('Failed to save remote progress: $error\n$stackTrace');
+      }
+    });
+    _remoteChain = write.catchError((Object error, StackTrace stackTrace) {
+      debugPrint('Remote save queue error: $error\n$stackTrace');
+    });
+    return write;
+  }
+
   Future<LoadedSave?> loadCached({String? userId}) async {
+    await _localChain;
     final stored = await _loadFromStore(localStore, userId);
     if (stored == null) return null;
 
@@ -81,6 +117,9 @@ class SaveRepository {
     void Function(Pet pet, int coins, List<String> ownedAccessories)?
     onLocalReady,
   }) async {
+    // Flush in-flight local writes so a rename just before logout/login is visible.
+    await _localChain;
+
     if (userId == null || userId.isEmpty) {
       return loadCached(userId: userId);
     }
@@ -135,9 +174,11 @@ class SaveRepository {
       _advancePetToNow(resultPet, stored.savedAt);
     }
 
+    // Stamp "now" after advancing so the next load does not re-apply elapsed time.
+    // Safe because in-flight local saves are flushed at the start of load().
     final syncedAt = DateTime.now();
     unawaited(
-      _writeLocal(userId, resultPet, resultCoins, resultOwned, syncedAt),
+      _enqueueLocal(userId, resultPet, resultCoins, resultOwned, syncedAt),
     );
 
     if (remote != null && identical(stored, local)) {
@@ -147,14 +188,7 @@ class SaveRepository {
         resultOwned,
         syncedAt,
       );
-      unawaited(
-        remoteStore.saveRaw(userId, payload).catchError((
-          Object error,
-          StackTrace stackTrace,
-        ) {
-          debugPrint('Failed to sync remote save: $error\n$stackTrace');
-        }),
-      );
+      unawaited(_enqueueRemote(userId, payload));
     }
 
     return (
@@ -164,6 +198,10 @@ class SaveRepository {
     );
   }
 
+  /// Persists progress locally (awaited) and syncs remotely in the background.
+  ///
+  /// Callers that `await` this (e.g. logout) get a local durability guarantee
+  /// without waiting on Firestore.
   Future<void> save(
     Pet pet, {
     required int coins,
@@ -174,39 +212,26 @@ class SaveRepository {
     final coinsSnapshot = coins;
     final ownedSnapshot = List<String>.from(ownedAccessories);
     final savedAt = DateTime.now();
+    final saveData = codec.encode(
+      petSnapshot,
+      coinsSnapshot,
+      ownedSnapshot,
+      savedAt,
+    );
 
-    final save = _saveChain.then((_) async {
-      final saveData = codec.encode(
-        petSnapshot,
-        coinsSnapshot,
-        ownedSnapshot,
-        savedAt,
-      );
+    final localSave = _enqueueLocal(
+      userId,
+      petSnapshot,
+      coinsSnapshot,
+      ownedSnapshot,
+      savedAt,
+    );
 
-      await _writeLocal(
-        userId,
-        petSnapshot,
-        coinsSnapshot,
-        ownedSnapshot,
-        savedAt,
-      );
+    if (userId != null && userId.isNotEmpty) {
+      unawaited(_enqueueRemote(userId, saveData));
+    }
 
-      if (userId == null || userId.isEmpty) {
-        return;
-      }
-
-      try {
-        await remoteStore.saveRaw(userId, saveData);
-      } catch (error, stackTrace) {
-        debugPrint('Failed to save remote progress: $error\n$stackTrace');
-      }
-    });
-
-    _saveChain = save.catchError((Object error, StackTrace stackTrace) {
-      debugPrint('Save queue error: $error\n$stackTrace');
-    });
-
-    return save;
+    return localSave;
   }
 
   Future<void> delete({String? userId}) async {
