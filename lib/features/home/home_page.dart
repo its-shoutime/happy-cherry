@@ -6,6 +6,7 @@ import 'package:happy_cherry/app/audio_manager.dart';
 import 'package:happy_cherry/app/loading_screen.dart';
 import 'package:happy_cherry/core/pet.dart';
 import 'package:happy_cherry/features/cherry_catch/game.dart';
+import 'package:happy_cherry/features/cherry_memory/cherry_memory.dart';
 import 'package:happy_cherry/features/cherry_says/game2.dart';
 import 'package:happy_cherry/features/hatch/death.dart';
 import 'package:happy_cherry/features/hatch/hatch_screen.dart';
@@ -31,7 +32,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-enum _GameChoice { cherryCatch, cherrySays }
+enum _GameChoice { cherryCatch, cherrySays, cherryMemory }
 
 class _HomePageState extends State<HomePage> {
   late final HomeController _controller;
@@ -122,6 +123,16 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, _GameChoice.cherryMemory),
+              child: Text(
+                'Cherry Memory',
+                style: AppTheme.pixelText(
+                  fontSize: 14,
+                  color: AppTheme.textDark,
+                ),
+              ),
+            ),
           ],
         );
       },
@@ -138,6 +149,17 @@ class _HomePageState extends State<HomePage> {
       );
       if (!mounted) return;
       _controller.onPlayFinished(score);
+      return;
+    }
+
+    if (selectedGame == _GameChoice.cherryMemory) {
+      await navigator.push<void>(
+        MaterialPageRoute(
+          builder: (_) => CherryMemoryGame(
+            onGameFinished: _controller.onCherryMemoryFinished,
+          ),
+        ),
+      );
       return;
     }
 

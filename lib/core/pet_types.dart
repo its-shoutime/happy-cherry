@@ -19,7 +19,7 @@ class PetType {
 const PetType blob = PetType(
   name: 'Blob',
   assetPath: 'assets/pets/blob',
-  bedTime: Duration(hours: 23), // 11pm–8am
+  bedTime: Duration(hours: 00), // 11pm–8am
   wakeTime: Duration(hours: 8),
   stage: PetStage.baby,
 );
@@ -112,7 +112,20 @@ const PetType demon = PetType(
   stage: PetStage.adult,
 );
 
-const List<PetType> allPetTypes = [blob, angel, bear, cherry, demon, flower, lloyd, mousse, puffaloo, sprout, squeaky, starfruit];
+const List<PetType> allPetTypes = [
+  blob,
+  angel,
+  bear,
+  cherry,
+  demon,
+  flower,
+  lloyd,
+  mousse,
+  puffaloo,
+  sprout,
+  squeaky,
+  starfruit,
+];
 
 PetType petTypeFromName(String? name) {
   if (name == null) return blob;

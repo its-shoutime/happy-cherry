@@ -7,6 +7,7 @@ import 'package:happy_cherry/core/cherry_catch_logic.dart';
 import 'package:happy_cherry/core/pet.dart';
 import 'package:happy_cherry/core/time_tracker.dart';
 import 'package:happy_cherry/data/game_state.dart';
+import 'package:happy_cherry/features/cherry_memory/cherry_memory.dart';
 
 /// Session / load / save / tick / death for the home screen (SRP).
 class HomeController extends ChangeNotifier {
@@ -271,6 +272,34 @@ class HomeController extends ChangeNotifier {
       showStars = false;
       notifyListeners();
     });
+  }
+
+  void onCherryMemoryFinished(CherryMemoryResult result) {
+    AudioManager.instance.playBgm();
+    if (result.coinReward <= 0 && result.happinessReward <= 0) return;
+
+    coins += result.coinReward;
+    if (result.coinReward > 0) {
+      AudioManager.instance.playCoin();
+    }
+
+    if (result.happinessReward > 0) {
+      pet.happiness = (pet.happiness + result.happinessReward).clamp(
+        0.0,
+        Pet.maxStat,
+      );
+      showStars = true;
+    }
+
+    notifyListeners();
+    unawaited(saveProgress());
+
+    if (showStars) {
+      Future.delayed(const Duration(seconds: 2), () {
+        showStars = false;
+        notifyListeners();
+      });
+    }
   }
 
   void onClean() {
