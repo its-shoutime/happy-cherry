@@ -30,6 +30,7 @@ class HomeController extends ChangeNotifier {
   bool isDead = false;
   bool showFood = false;
   bool showStars = false;
+  String? activeFoodId;
   bool muted = AudioManager.instance.muted;
 
   Future<void> start() async {
@@ -127,6 +128,7 @@ class HomeController extends ChangeNotifier {
     isDead = false;
     showFood = false;
     showStars = false;
+    activeFoodId = null;
     isHatching = true;
     timeTracker = PetTimeTracker(pet: pet, onTick: onTick, onDeath: onDeath);
     notifyListeners();
@@ -217,16 +219,18 @@ class HomeController extends ChangeNotifier {
     unawaited(saveProgress());
   }
 
-  void onFeed() {
+  void onFeed(String foodId) {
     if (pet.hunger >= Pet.maxStat) return;
     AudioManager.instance.playFeed();
     pet.feed();
     showFood = true;
+    activeFoodId = foodId;
     notifyListeners();
     unawaited(saveProgress());
 
     Future.delayed(const Duration(seconds: 2), () {
       showFood = false;
+      activeFoodId = null;
       notifyListeners();
     });
   }

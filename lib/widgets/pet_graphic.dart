@@ -9,6 +9,7 @@ class PetGraphic extends StatelessWidget {
   final double height;
   final bool showFood;
   final bool showStars;
+  final String? foodId;
 
   /// Optional preview override so callers need not clone the pet (LoD).
   final String? accessoryOverride;
@@ -19,6 +20,7 @@ class PetGraphic extends StatelessWidget {
     this.height = 200,
     this.showFood = false,
     this.showStars = false,
+    this.foodId,
     this.accessoryOverride,
   });
 
@@ -96,10 +98,9 @@ class PetGraphic extends StatelessWidget {
                 Positioned(
                   left: max(0.0, (maxWidth - height * 0.16) / 2),
                   bottom: height * 0.04,
-                  child: Icon(
-                    Icons.restaurant,
-                    color: Colors.orangeAccent,
-                    size: height * 0.16,
+                  child: Text(
+                    _foodEmoji(foodId),
+                    style: TextStyle(fontSize: height * 0.16),
                   ),
                 ),
 
@@ -110,10 +111,9 @@ class PetGraphic extends StatelessWidget {
                     maxWidth / 2 + height * 0.38,
                   ),
                   bottom: height * 0.06,
-                  child: Icon(
-                    Icons.fastfood,
-                    color: Colors.brown,
-                    size: height * 0.16,
+                  child: Text(
+                    _foodEmoji(foodId),
+                    style: TextStyle(fontSize: height * 0.12),
                   ),
                 ),
               ],
@@ -143,5 +143,20 @@ class PetGraphic extends StatelessWidget {
         );
       },
     );
+  }
+
+  String _foodEmoji(String? foodId) {
+    switch (foodId) {
+      case 'apple':
+        return '🍎';
+      case 'cookie':
+        return '🍪';
+      case 'cake':
+        return '🍰';
+      case 'berry':
+        return '🫐';
+      default:
+        return '🍽️';
+    }
   }
 }

@@ -170,6 +170,68 @@ class _HomePageState extends State<HomePage> {
     _controller.onCherrySaysFinished(happinessReward ?? 0);
   }
 
+  Future<void> _onFeed() async {
+    AudioManager.instance.playButton();
+
+    final selectedFood = await showDialog<String?>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppTheme.backgroundPink,
+          title: Text(
+            'What should the pet eat?',
+            style: AppTheme.pixelText(fontSize: 18, color: AppTheme.textDark),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'apple'),
+              child: Text(
+                '🍎 Apple',
+                style: AppTheme.pixelText(
+                  fontSize: 14,
+                  color: AppTheme.textDark,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'cookie'),
+              child: Text(
+                '🍪 Cookie',
+                style: AppTheme.pixelText(
+                  fontSize: 14,
+                  color: AppTheme.textDark,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'cake'),
+              child: Text(
+                '🍰 Cake',
+                style: AppTheme.pixelText(
+                  fontSize: 14,
+                  color: AppTheme.textDark,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'berry'),
+              child: Text(
+                '🫐 Berry',
+                style: AppTheme.pixelText(
+                  fontSize: 14,
+                  color: AppTheme.textDark,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (selectedFood == null || !mounted) return;
+    _controller.onFeed(selectedFood);
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -238,6 +300,7 @@ class _HomePageState extends State<HomePage> {
                         pet: pet,
                         height: 200,
                         showFood: c.showFood,
+                        foodId: c.activeFoodId,
                         showStars: c.showStars,
                       ),
                     ),
@@ -299,7 +362,7 @@ class _HomePageState extends State<HomePage> {
                     UserActions(
                       isSleeping: pet.mood == PetMood.sleeping,
                       canHeal: pet.isSick,
-                      onFeed: c.onFeed,
+                      onFeed: _onFeed,
                       onPlay: _onPlay,
                       onClean: c.onClean,
                       onHeal: c.onHeal,
