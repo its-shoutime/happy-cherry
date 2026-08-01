@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:happy_cherry/core/pet.dart';
+import 'package:happy_cherry/core/room_decorations.dart';
 import 'package:happy_cherry/widgets/accessory_graphic.dart';
 
 class PetGraphic extends StatelessWidget {
@@ -47,6 +48,15 @@ class PetGraphic extends StatelessWidget {
             alignment: Alignment.center,
             children: [
               // Pet image centered
+              if (pet.roomDecoration != null && pet.roomDecoration!.isNotEmpty)
+                Positioned(
+                  top: height * 0.1,
+                  child: Text(
+                    RoomDecorationCatalog.emojiFor(pet.roomDecoration),
+                    style: TextStyle(fontSize: height * 0.22),
+                  ),
+                ),
+
               Image.asset(pet.assetPath, height: height, fit: BoxFit.contain),
 
               if (accessory != null && accessory.isNotEmpty)

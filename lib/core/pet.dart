@@ -23,6 +23,7 @@ class Pet {
   int attentionSeconds;
   bool attentionSuppressed;
   String? accessory;
+  String? roomDecoration;
 
   Pet({
     required this.name,
@@ -39,6 +40,7 @@ class Pet {
     this.attentionSeconds = 0,
     this.attentionSuppressed = false,
     this.accessory,
+    this.roomDecoration,
   });
 
   PetMood get mood => moodAt(DateTime.now());
@@ -344,6 +346,7 @@ class Pet {
     'attentionSeconds': attentionSeconds,
     'attentionSuppressed': attentionSuppressed,
     'accessory': accessory,
+    'roomDecoration': roomDecoration,
   };
 
   factory Pet.fromJson(Map<String, dynamic> json) => Pet(
@@ -361,6 +364,7 @@ class Pet {
     attentionSeconds: (json['attentionSeconds'] as num?)?.toInt() ?? 0,
     attentionSuppressed: json['attentionSuppressed'] as bool? ?? false,
     accessory: json['accessory'] as String?,
+    roomDecoration: json['roomDecoration'] as String?,
   );
 
   /// Migrates legacy 0–100 saves onto the 0–8 half-heart scale.
