@@ -47,17 +47,101 @@ class PetGraphic extends StatelessWidget {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // Pet image centered
-              if (pet.roomDecoration != null && pet.roomDecoration!.isNotEmpty)
+              // Room decoration displayed completely outside/beside the pet so it's not blocked at all
+              if (pet.roomDecoration != null &&
+                  pet.roomDecoration!.isNotEmpty) ...[
                 Positioned(
-                  top: height * 0.1,
+                  left: max(0.0, (maxWidth / 2) - (height * 0.70)),
+                  bottom: height * 0.10,
                   child: Text(
                     RoomDecorationCatalog.emojiFor(pet.roomDecoration),
-                    style: TextStyle(fontSize: height * 0.22),
+                    style: TextStyle(fontSize: height * 0.25),
                   ),
                 ),
+                Positioned(
+                  right: max(0.0, (maxWidth / 2) - (height * 0.70)),
+                  bottom: height * 0.10,
+                  child: Text(
+                    RoomDecorationCatalog.emojiFor(pet.roomDecoration),
+                    style: TextStyle(fontSize: height * 0.25),
+                  ),
+                ),
+              ],
 
               Image.asset(pet.assetPath, height: height, fit: BoxFit.contain),
+
+              // Natural cloud thought bubble with tail dots above character (positioned on top-right)
+              Positioned(
+                top: 0,
+                right: max(0.0, (maxWidth / 2) - (height * 0.70)),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: height * 0.08,
+                        vertical: height * 0.04,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.pink.shade200,
+                          width: 2,
+                        ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black12,
+                            blurRadius: 6,
+                            offset: Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        _thoughtText(pet),
+                        style: TextStyle(
+                          fontSize: height * 0.10,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.pink.shade900,
+                        ),
+                      ),
+                    ),
+                    // Small trailing thought circles pointing down towards the pet
+                    Positioned(
+                      left: height * 0.06,
+                      bottom: -8,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.pink.shade200,
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: height * 0.03,
+                      bottom: -15,
+                      child: Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.pink.shade200,
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
               if (accessory != null && accessory.isNotEmpty)
                 Positioned(
@@ -68,11 +152,25 @@ class PetGraphic extends StatelessWidget {
                   ),
                 ),
 
+              // Attention notification icon positioned top-left to avoid thought bubble overlap
               if (pet.attentionVisible)
-                Align(
-                  alignment: Alignment.topCenter,
-                  child: Padding(
-                    padding: EdgeInsets.only(top: height * 0.02),
+                Positioned(
+                  top: 0,
+                  left: max(0.0, (maxWidth / 2) - (height * 0.55)),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.red.shade300, width: 2),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
                     child: Icon(
                       Icons.notification_important,
                       color: Colors.red,
@@ -153,6 +251,31 @@ class PetGraphic extends StatelessWidget {
         );
       },
     );
+  }
+
+  String _thoughtText(Pet pet) {
+    if (pet.isSick) {
+      return '🤒 Need medicine...';
+    }
+    if (pet.isAsleep) {
+      return '💤 zzz...';
+    }
+    if (pet.hunger <= 2 && pet.happiness <= 2) {
+      return '🍔 Need food & fun!';
+    }
+    if (pet.hunger <= 2) {
+      return '🍔 I\'m hungry!';
+    }
+    if (pet.happiness <= 2) {
+      return '🎾 Let\'s play!';
+    }
+    if (pet.poopCount > 0) {
+      return '💩 Clean please!';
+    }
+    if (pet.hunger >= Pet.maxStat && pet.happiness >= Pet.maxStat) {
+      return '✨ Feeling great!';
+    }
+    return '💭 Content ~';
   }
 
   String _foodEmoji(String? foodId) {

@@ -75,18 +75,35 @@ class Pet {
   }
 
   String get feels {
-    switch (mood) {
-      case PetMood.happy:
-        return 'YAY';
-      case PetMood.okay:
-        return '...';
-      case PetMood.sad:
-        return '*cries';
-      case PetMood.sleeping:
-        return 'zzzz';
-      case PetMood.sick:
-        return 'ouch';
+    if (isSick) {
+      return 'ouch 🤒';
     }
+
+    if (isAsleep) {
+      return 'zzzz 💤';
+    }
+
+    if (hunger <= 2 && happiness <= 2) {
+      return 'hungry & sad 🍔😢';
+    }
+
+    if (hunger <= 2) {
+      return 'hungry! 🍔';
+    }
+
+    if (happiness <= 2) {
+      return 'bored... 🎾';
+    }
+
+    if (poopCount > 0) {
+      return 'eew stinky 💩';
+    }
+
+    if (_isVisuallyFull(hunger) && _isVisuallyFull(happiness)) {
+      return 'YAY! Happy! ✨';
+    }
+
+    return 'feeling fine 🙂';
   }
 
   bool get isAsleep => isAsleepAt(DateTime.now());
