@@ -254,28 +254,74 @@ class PetGraphic extends StatelessWidget {
   }
 
   String _thoughtText(Pet pet) {
+    // Time seed that cycles thoughts smoothly every 10 seconds based on pet age and system time
+    final now = DateTime.now();
+    final timeSeed = (now.second ~/ 10) + (now.minute * 6) + pet.ageInMinutes;
+
     if (pet.isSick) {
-      return '🤒 Need medicine...';
+      final options = ['Feeling unwell...', 'Tummy hurts...', 'Ouch'];
+      return options[timeSeed % options.length];
     }
+
     if (pet.isAsleep) {
-      return '💤 zzz...';
+      final options = ['💤 zzz...', '💤 Sleeping...', '💤 Do not disturb!'];
+      return options[timeSeed % options.length];
     }
+
     if (pet.hunger <= 2 && pet.happiness <= 2) {
-      return '🍔 Need food & fun!';
+      final options = [
+        'Sad...',
+        'Hungry and bored...',
+        'Want attention!',
+        'Why you neglect me?',
+      ];
+      return options[timeSeed % options.length];
     }
+
     if (pet.hunger <= 2) {
-      return '🍔 I\'m hungry!';
+      final options = [
+        'I\'m hungry!',
+        'When is snack time?',
+        'Tummy is growling!',
+        'Food please!',
+      ];
+      return options[timeSeed % options.length];
     }
+
     if (pet.happiness <= 2) {
-      return '🎾 Let\'s play!';
+      final options = [
+        'Let\'s play!',
+        'Want to play a game?',
+        'So bored...',
+        'Play time?',
+      ];
+      return options[timeSeed % options.length];
     }
+
     if (pet.poopCount > 0) {
-      return '💩 Clean please!';
+      final options = [
+        'Clean please!',
+        'Stinky room...',
+        'Needs a sweep!',
+        'Ack',
+      ];
+      return options[timeSeed % options.length];
     }
+
     if (pet.hunger >= Pet.maxStat && pet.happiness >= Pet.maxStat) {
-      return '✨ Feeling great!';
+      final options = [' YAY', 'Yippee!', 'Happy happy!'];
+      return options[timeSeed % options.length];
     }
-    return '💭 Content ~';
+
+    // Idle spontaneous thoughts
+    final idleOptions = [
+      'What\'s for dinner?',
+      'Daydreaming...',
+      '🎶',
+      'How are you?',
+      'Mmm cherries...',
+    ];
+    return idleOptions[timeSeed % idleOptions.length];
   }
 
   String _foodEmoji(String? foodId) {

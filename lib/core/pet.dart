@@ -103,7 +103,7 @@ class Pet {
       return 'YAY! Happy! ✨';
     }
 
-    return 'feeling fine 🙂';
+    return 'life\'s alright 🙂';
   }
 
   bool get isAsleep => isAsleepAt(DateTime.now());
